@@ -1808,6 +1808,32 @@ function clearFileNameDisplay() {
     updateFileNameDisplay(null);
 }
 
+function normalizeFileMode(mode) {
+    return mode === FILE_MODE_JSONL ? FILE_MODE_JSONL : FILE_MODE_JSON;
+}
+
+function setFileOperationMode(mode, options = {}) {
+    fileOperationMode = normalizeFileMode(mode);
+    if (!options.skipSync && fileModeInputs && fileModeInputs.length) {
+        fileModeInputs.forEach((input) => {
+            input.checked = input.value === fileOperationMode;
+        });
+    }
+    updateFilePickerAccept();
+    updateDownloadButtons();
+}
+
+function getFileOperationMode() {
+    return fileOperationMode;
+}
+
+function updateFilePickerAccept() {
+    if (!filePicker) return;
+    filePicker.accept = fileOperationMode === FILE_MODE_JSONL
+        ? ".jsonl, .ndjson, .jsonlines, .txt"
+        : ".json, .geojson, .txt";
+}
+
 /*************************************
  *           Controls                *
  *************************************/
@@ -1820,8 +1846,12 @@ let g_jsonlLoader = null; // Global JSONL loader for line navigation
 let g_currentRootLoader = null;
 let g_currentMode = null;
 let g_editingEnabled = true;
-let downloadJsonButton = null;
-let downloadJsonlButton = null;
+const FILE_MODE_JSON = "json";
+const FILE_MODE_JSONL = "jsonl";
+let fileOperationMode = FILE_MODE_JSON;
+let downloadDataButton = null;
+let filePicker = null;
+let fileModeInputs = [];
 
 updateTopLevelNavigator();
 
@@ -2000,12 +2030,14 @@ function clearCurrentRootLoader() {
 }
 
 function updateDownloadButtons() {
-    if (downloadJsonButton) {
-        downloadJsonButton.disabled = !g_currentRootLoader;
-    }
-    if (downloadJsonlButton) {
-        downloadJsonlButton.disabled = !g_jsonlLoader;
-    }
+    if (!downloadDataButton) return;
+    const mode = getFileOperationMode();
+    const isJsonMode = mode === FILE_MODE_JSON;
+    downloadDataButton.disabled = isJsonMode ? !g_currentRootLoader : !g_jsonlLoader;
+    downloadDataButton.textContent = isJsonMode ? "Save JSON" : "Save JSONL";
+    downloadDataButton.title = isJsonMode
+        ? "Download the current view as JSON"
+        : "Download the current data as JSON Lines";
 }
 
 function getJsonText() {
@@ -2140,6 +2172,7 @@ function renderJsonStr(jsonStr) {
 }
 
 async function renderJsonFile(file) {
+    hideJsonlControls();
     document.querySelector("#view").replaceChildren();
 
     let loader = newDataLoader();
@@ -2266,26 +2299,33 @@ if (pasteToggleButton && pasteCollapse) {
     }
 }
 
-let filePicker = document.querySelector("#filepicker");
-filePicker.addEventListener("change", (ev) => {
-    hideJsonlControls(); // Hide JSONL controls when using regular file picker
-    if (filePicker.files[0]) {
-        updateFileNameDisplay(filePicker.files[0].name);
-        renderJsonFile(filePicker.files[0]);
-    } else {
-        clearFileNameDisplay();
-    }
-})
+fileModeInputs = Array.from(document.querySelectorAll("input[name='file-mode']"));
+fileModeInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+        if (input.checked) {
+            setFileOperationMode(input.value);
+        }
+    });
+});
 
-let jsonlPicker = document.querySelector("#jsonlpicker");
-jsonlPicker.addEventListener("change", (ev) => {
-    if (jsonlPicker.files[0]) {
-        updateFileNameDisplay(jsonlPicker.files[0].name);
-        renderJsonlFile(jsonlPicker.files[0]);
-    } else {
-        clearFileNameDisplay();
-    }
-})
+filePicker = document.querySelector("#filepicker");
+if (filePicker) {
+    filePicker.addEventListener("change", () => {
+        const files = filePicker.files;
+        if (!files || !files[0]) {
+            clearFileNameDisplay();
+            return;
+        }
+        const file = files[0];
+        updateFileNameDisplay(file.name);
+        if (getFileOperationMode() === FILE_MODE_JSONL) {
+            renderJsonlFile(file);
+        }
+        else {
+            renderJsonFile(file);
+        }
+    });
+}
 
 // JSONL navigation controls
 let prevButton = document.querySelector("#prev-line");
@@ -2405,16 +2445,18 @@ if (editingToggle) {
     });
 }
 
-downloadJsonButton = document.querySelector("#download-json");
-if (downloadJsonButton) {
-    downloadJsonButton.addEventListener("click", () => handleSaveRequest("json"));
+downloadDataButton = document.querySelector("#download-data");
+if (downloadDataButton) {
+    downloadDataButton.addEventListener("click", () => handleSaveRequest(getFileOperationMode()));
 }
-
-downloadJsonlButton = document.querySelector("#download-jsonl");
-if (downloadJsonlButton) {
-    downloadJsonlButton.addEventListener("click", () => handleSaveRequest("jsonl"));
+const initialModeInput = fileModeInputs.find((input) => input.checked);
+const preferredInitialMode = initialModeInput ? initialModeInput.value : FILE_MODE_JSON;
+if (fileOperationMode === FILE_MODE_JSON) {
+    setFileOperationMode(preferredInitialMode, { skipSync: true });
 }
-updateDownloadButtons();
+else {
+    setFileOperationMode(fileOperationMode);
+}
 
 if (searchRegexToggle) {
     searchState.isRegex = searchRegexToggle.checked;
@@ -2474,6 +2516,7 @@ async function handleOpenWithFile(filePath, mode) {
             
             // Update file name display
             updateFileNameDisplay(fileName);
+            setFileOperationMode(mode === "jsonl" ? FILE_MODE_JSONL : FILE_MODE_JSON);
             
             if (mode === 'jsonl') {
                 // Create a temporary blob to simulate a file for JSONL processing
