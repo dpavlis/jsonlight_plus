@@ -1504,7 +1504,9 @@ function applyReplacementTemplate(template, matchResult, inputText) {
 // for the root-level value, key is null.
 function renderKV(key, loader) {
     let kvRoot = newKV(loader);
+    let kv = kvRoot.querySelector(".kv");
     let kvText = kvRoot.querySelector(".kv .kv-text");
+    attachBulkCheckboxIfNeeded(kvRoot, kv, kvText);
     kvText.appendChild(renderKey(key));
 
     let colonSpan = document.createElement("span");
@@ -1797,6 +1799,7 @@ function handleValueChanged(loader, options = {}) {
     }
     updateDownloadButtons();
     updateTopLevelNavigator();
+    updateBulkControls();
     if (!options.skipSearchRefresh) {
         requestSearchRefresh();
     }
@@ -1812,6 +1815,7 @@ function setEditingEnabled(isEnabled) {
     document.querySelectorAll(".edit-button, .duplicate-button, .delete-button").forEach(button => {
         updateEditingButtonVisibility(button);
     });
+    updateBulkControls();
 }
 
 function renderRawString(kvRoot) {
@@ -2152,6 +2156,190 @@ function updateFilePickerAccept() {
         : ".json, .geojson, .txt";
 }
 
+/*************************************
+ *        Bulk Operations            *
+ *************************************/
+
+function canUseBulkOperations() {
+    if (!g_currentRootLoader) return false;
+    const value = g_currentRootLoader.getValue();
+    if (value == null) return false;
+    if (Array.isArray(value)) return true;
+    return typeof value === "object";
+}
+
+function getBulkSelectionIdentifier(loader) {
+    if (!loader || !g_currentRootLoader) return null;
+    if (!loader.parentLoader || loader.parentLoader !== g_currentRootLoader) return null;
+    const segment = loader.parentKey;
+    if (typeof segment === "number") {
+        return `n:${segment}`;
+    }
+    return `s:${String(segment)}`;
+}
+
+function isBulkItemSelected(loader) {
+    const identifier = getBulkSelectionIdentifier(loader);
+    if (!identifier) return false;
+    return bulkSelectionState.has(identifier);
+}
+
+function handleBulkCheckboxChange(loader, isChecked) {
+    const identifier = getBulkSelectionIdentifier(loader);
+    if (!identifier) return;
+    if (isChecked) {
+        bulkSelectionState.set(identifier, loader.parentKey);
+    }
+    else {
+        bulkSelectionState.delete(identifier);
+    }
+    updateBulkControls();
+}
+
+function shouldShowBulkCheckbox(loader) {
+    return bulkOperationsEnabled
+        && !!loader
+        && !!loader.parentLoader
+        && loader.parentLoader === g_currentRootLoader;
+}
+
+function attachBulkCheckboxIfNeeded(kvRoot, kvElement, kvTextElement) {
+    if (!kvRoot || !kvElement || !kvTextElement) return;
+    const loader = kvRoot.loader;
+    if (!shouldShowBulkCheckbox(loader)) return;
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("form-check", "bulk-checkbox-wrapper");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.classList.add("form-check-input");
+    checkbox.checked = isBulkItemSelected(loader);
+    checkbox.addEventListener("change", () => handleBulkCheckboxChange(loader, checkbox.checked));
+    wrapper.appendChild(checkbox);
+    kvElement.insertBefore(wrapper, kvTextElement);
+}
+
+function clearBulkSelectionState() {
+    if (bulkSelectionState.size === 0) return;
+    bulkSelectionState.clear();
+}
+
+function pruneBulkSelectionAgainstRoot() {
+    if (bulkSelectionState.size === 0) return;
+    if (!g_currentRootLoader) {
+        bulkSelectionState.clear();
+        return;
+    }
+    const value = g_currentRootLoader.getValue();
+    if (value == null || typeof value !== "object") {
+        bulkSelectionState.clear();
+        return;
+    }
+    if (Array.isArray(value)) {
+        const length = value.length;
+        for (const [identifier, segment] of bulkSelectionState.entries()) {
+            const index = Number(segment);
+            if (!Number.isInteger(index) || index < 0 || index >= length) {
+                bulkSelectionState.delete(identifier);
+            }
+        }
+        return;
+    }
+    for (const [identifier, segment] of bulkSelectionState.entries()) {
+        if (!Object.prototype.hasOwnProperty.call(value, segment)) {
+            bulkSelectionState.delete(identifier);
+        }
+    }
+}
+
+function updateBulkControls() {
+    pruneBulkSelectionAgainstRoot();
+    const allowed = g_editingEnabled && canUseBulkOperations();
+    if (!allowed && bulkOperationsEnabled) {
+        bulkOperationsEnabled = false;
+        clearBulkSelectionState();
+        refreshBulkRendering();
+    }
+    if (bulkToggleInput) {
+        bulkToggleInput.disabled = !allowed;
+        bulkToggleInput.checked = allowed && bulkOperationsEnabled;
+    }
+    if (bulkDeleteContainer) {
+        bulkDeleteContainer.style.display = bulkOperationsEnabled ? "" : "none";
+    }
+    if (bulkDeleteButton) {
+        bulkDeleteButton.disabled = !bulkOperationsEnabled || bulkSelectionState.size === 0;
+    }
+}
+
+function setBulkOperationsEnabled(enabled) {
+    const nextValue = !!enabled;
+    if (bulkOperationsEnabled === nextValue) return;
+    if (nextValue && (!g_editingEnabled || !canUseBulkOperations())) {
+        if (bulkToggleInput) {
+            bulkToggleInput.checked = false;
+        }
+        return;
+    }
+    bulkOperationsEnabled = nextValue;
+    if (!bulkOperationsEnabled) {
+        clearBulkSelectionState();
+    }
+    updateBulkControls();
+    refreshBulkRendering();
+}
+
+async function refreshBulkRendering() {
+    if (!g_currentRootLoader) return;
+    const expandedPaths = captureExpandedPaths(g_currentRootLoader);
+    rerenderCurrentRoot();
+    await restoreExpandedPaths(expandedPaths);
+}
+
+async function handleBulkDeleteSelected() {
+    if (!bulkOperationsEnabled || bulkSelectionState.size === 0) return;
+    if (!g_editingEnabled) {
+        alert("Enable editing to delete items.");
+        return;
+    }
+    if (!g_currentRootLoader) return;
+    const rootValue = g_currentRootLoader.getValue();
+    if (rootValue == null || typeof rootValue !== "object") {
+        alert("Bulk delete requires a JSON object or array at the root level.");
+        return;
+    }
+    const itemCount = bulkSelectionState.size;
+    const confirmed = typeof window === "undefined"
+        ? true
+        : window.confirm(`Delete ${itemCount} selected item${itemCount === 1 ? "" : "s"}? This cannot be undone.`);
+    if (!confirmed) {
+        return;
+    }
+    const expandedPaths = captureExpandedPaths();
+    if (Array.isArray(rootValue)) {
+        const indexes = Array.from(bulkSelectionState.values())
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value))
+            .sort((a, b) => b - a);
+        indexes.forEach((index) => {
+            if (index >= 0 && index < rootValue.length) {
+                rootValue.splice(index, 1);
+            }
+        });
+    }
+    else {
+        Array.from(bulkSelectionState.values()).forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(rootValue, key)) {
+                delete rootValue[key];
+            }
+        });
+    }
+    clearBulkSelectionState();
+    handleValueChanged(g_currentRootLoader, { skipSearchRefresh: true });
+    rerenderCurrentRoot();
+    await restoreExpandedPaths(expandedPaths);
+    updateBulkControls();
+}
+
 function initializeTooltips() {
     if (typeof document === "undefined" || typeof bootstrap === "undefined") return;
     const tooltipElements = Array.from(document.querySelectorAll("[data-bs-toggle='tooltip']"));
@@ -2226,6 +2414,11 @@ const THEME_DARK = "dark";
 const THEME_STORAGE_KEY = "jsonlight.themePreference";
 let currentTheme = THEME_LIGHT;
 let themeToggleInput = null;
+let bulkOperationsEnabled = false;
+const bulkSelectionState = new Map();
+let bulkToggleInput = null;
+let bulkDeleteButton = null;
+let bulkDeleteContainer = null;
 
 updateTopLevelNavigator();
 
@@ -2395,6 +2588,8 @@ async function handleDuplicateNode(kvRoot) {
 function setCurrentRootLoader(loader, mode) {
     g_currentRootLoader = loader;
     g_currentMode = mode;
+    clearBulkSelectionState();
+    updateBulkControls();
     updateDownloadButtons();
     updateTopLevelNavigator();
 }
@@ -2849,6 +3044,22 @@ if (editingToggle) {
         setEditingEnabled(editingToggle.checked);
     });
 }
+
+bulkToggleInput = document.querySelector("#toggle-bulk-operations");
+bulkDeleteButton = document.querySelector("#bulk-delete-selected");
+bulkDeleteContainer = document.querySelector("#bulk-operations-actions");
+if (bulkToggleInput) {
+    bulkToggleInput.checked = bulkOperationsEnabled;
+    bulkToggleInput.addEventListener("change", () => {
+        setBulkOperationsEnabled(bulkToggleInput.checked);
+    });
+}
+if (bulkDeleteButton) {
+    bulkDeleteButton.addEventListener("click", () => {
+        handleBulkDeleteSelected();
+    });
+}
+updateBulkControls();
 
 downloadDataButton = document.querySelector("#download-data");
 if (downloadDataButton) {

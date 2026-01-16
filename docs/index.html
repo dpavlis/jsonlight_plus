@@ -141,6 +141,13 @@
         <input class="form-check-input" type="checkbox" id="toggle-editing" checked>
         <label class="form-check-label" for="toggle-editing">Enable editing</label>
       </div>
+      <div class="form-check form-switch mt-3">
+        <input class="form-check-input" type="checkbox" id="toggle-bulk-operations">
+        <label class="form-check-label" for="toggle-bulk-operations">Bulk operations</label>
+      </div>
+      <div id="bulk-operations-actions" class="mt-2" style="display: none;">
+        <button type="button" class="btn btn-outline-danger btn-sm w-100" id="bulk-delete-selected" disabled>Delete selected</button>
+      </div>
       <div class="mb-auto"></div>
       <div id="file-name-display" class="text-muted small text-break" style="display: none;" title="">
         No file selected
