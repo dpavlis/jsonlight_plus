@@ -1,4 +1,6 @@
-# JSON Light (Plus)
+# JSON Light Plus
+
+**[🚀 Live Demo](https://dpavlis.github.io/jsonlight-/)**
 
 ## About
 
@@ -6,21 +8,23 @@ A JSON/JSONL viewer and editor designed for readability and practical editing wo
 
 ## Getting Started
 
-No installation or dependencies required! Simply:
+### Option 1: Use Online (Easiest)
+Just visit **[https://dpavlis.github.io/jsonlight-/](https://dpavlis.github.io/jsonlight-/)** in your browser—no installation needed!
 
+### Option 2: Run Locally
 1. Clone this repository (or download just the `docs` subdirectory)
 2. Open `docs/index.html` in your browser
 3. Start viewing and editing your JSON/JSONL files
 
-That's it—completely standalone and runs entirely in your browser.
+Completely standalone—runs entirely in your browser with no dependencies.
 
 ## Key Features
 
 ### Multi-line String Display (Original)
 Unlike most JSON viewers, JSON Light properly renders multi-line string values with actual line breaks instead of `\n` escape sequences. No more cluttered, compact passages—see your text as it's meant to be read.
 
-### Advanced Editing Capabilities (This Fork)
-This extended version adds powerful editing features specifically designed for working with LLM training data formats like ShareGPT and Alpaca:
+### Advanced Editing Capabilities (Plus Version)
+This Plus version adds powerful editing features specifically designed for working with LLM training data formats like ShareGPT and Alpaca:
 
 - **Plain-text editing**: Edit JSON string properties as plain text—no manual escaping of newlines, quotes, or special characters
 - **Duplicate & delete**: Quickly clone or remove array elements, perfect for managing conversational training examples
