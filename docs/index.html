@@ -112,7 +112,15 @@
         <div class="d-flex justify-content-between align-items-center">
           <div class="form-check form-check-inline mb-0">
             <input class="form-check-input" type="checkbox" id="search-regex">
-            <label class="form-check-label" for="search-regex">Regex</label>
+            <label class="form-check-label me-2" for="search-regex">Regex</label>
+            <button
+              type="button"
+              class="btn btn-link btn-sm p-0 text-muted regex-help"
+              data-bs-toggle="tooltip"
+              data-bs-html="true"
+              data-bs-title="<div class='text-start small'><div class='fw-bold mb-1'>Regex mode</div><div>Toggle this to search with regular expressions; replacement text can inject capture groups.</div><div class='mb-2'>Literal characters like <code>.</code>, <code>*</code>, <code>?</code>, <code>+</code>, <code>(</code>, <code>)</code> and <code>$</code> must be escaped (e.g. <code>\.</code>) to match themselves.</div><div class='fw-bold mb-1'>Example</div><div><span class='fw-semibold'>Pattern:</span> <code>(?&lt;area&gt;&#92;d{3})-(&#92;d{4})</code></div><div><span class='fw-semibold'>Sample text:</span> <code>Call 555-1234</code></div><div><span class='fw-semibold'>Replacement:</span> <code>$&lt;area&gt;:$2</code></div><div><span class='fw-semibold'>Result:</span> <code>Call 555:1234</code></div><div class='mt-1'>Use $1, $2 or $&lt;name&gt; to insert capture groups in the replacement.</div></div>"
+              aria-label="Regex replacement examples"
+            >ℹ️</button>
           </div>
           <small class="text-muted" id="search-status">0 / 0</small>
         </div>

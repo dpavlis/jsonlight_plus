@@ -2076,6 +2076,14 @@ function updateFilePickerAccept() {
         : ".json, .geojson, .txt";
 }
 
+function initializeTooltips() {
+    if (typeof document === "undefined" || typeof bootstrap === "undefined") return;
+    const tooltipElements = Array.from(document.querySelectorAll("[data-bs-toggle='tooltip']"));
+    tooltipElements.forEach((element) => {
+        bootstrap.Tooltip.getOrCreateInstance(element);
+    });
+}
+
 function applyTheme(theme) {
     const body = typeof document !== "undefined" ? document.body : null;
     if (!body) return;
@@ -2623,6 +2631,8 @@ if (themeToggleInput) {
         setTheme(themeToggleInput.checked ? THEME_DARK : THEME_LIGHT);
     });
 }
+
+initializeTooltips();
 
 // JSONL navigation controls
 let prevButton = document.querySelector("#prev-line");
