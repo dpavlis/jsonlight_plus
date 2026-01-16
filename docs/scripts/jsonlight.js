@@ -1834,6 +1834,48 @@ function updateFilePickerAccept() {
         : ".json, .geojson, .txt";
 }
 
+function applyTheme(theme) {
+    const body = typeof document !== "undefined" ? document.body : null;
+    if (!body) return;
+    body.classList.toggle("theme-dark", theme === THEME_DARK);
+}
+
+function setTheme(theme, options = {}) {
+    const normalized = theme === THEME_DARK ? THEME_DARK : THEME_LIGHT;
+    currentTheme = normalized;
+    applyTheme(normalized);
+    if (!options.skipToggleSync && themeToggleInput) {
+        themeToggleInput.checked = normalized === THEME_DARK;
+    }
+    if (!options.skipStorage) {
+        const storage = getLocalStorageSafe();
+        if (storage) {
+            storage.setItem(THEME_STORAGE_KEY, normalized);
+        }
+    }
+}
+
+function getStoredThemePreference() {
+    const storage = getLocalStorageSafe();
+    if (!storage) return null;
+    const stored = storage.getItem(THEME_STORAGE_KEY);
+    if (stored === THEME_DARK || stored === THEME_LIGHT) {
+        return stored;
+    }
+    return null;
+}
+
+function initThemeFromPreference() {
+    let preference = getStoredThemePreference();
+    if (!preference) {
+        const prefersDark = typeof window !== "undefined"
+            && typeof window.matchMedia === "function"
+            && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        preference = prefersDark ? THEME_DARK : THEME_LIGHT;
+    }
+    setTheme(preference, { skipStorage: true });
+}
+
 /*************************************
  *           Controls                *
  *************************************/
@@ -1852,6 +1894,11 @@ let fileOperationMode = FILE_MODE_JSON;
 let downloadDataButton = null;
 let filePicker = null;
 let fileModeInputs = [];
+const THEME_LIGHT = "light";
+const THEME_DARK = "dark";
+const THEME_STORAGE_KEY = "jsonlight.themePreference";
+let currentTheme = THEME_LIGHT;
+let themeToggleInput = null;
 
 updateTopLevelNavigator();
 
@@ -2324,6 +2371,14 @@ if (filePicker) {
         else {
             renderJsonFile(file);
         }
+    });
+}
+
+themeToggleInput = document.querySelector("#theme-toggle");
+initThemeFromPreference();
+if (themeToggleInput) {
+    themeToggleInput.addEventListener("change", () => {
+        setTheme(themeToggleInput.checked ? THEME_DARK : THEME_LIGHT);
     });
 }
 
