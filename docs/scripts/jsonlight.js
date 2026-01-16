@@ -1479,7 +1479,7 @@ function newKV(loader) {
 
 function newIconButton(text) {
     let button = document.createElement("button");
-    button.classList.add("btn", "btn-light", "btn-sm");
+    button.classList.add("btn", "btn-light", "btn-sm", "btn-icon", "btn-icon-large");
     button.setAttribute("type", "button");
     button.innerHTML = text;
     return button;
@@ -1569,7 +1569,8 @@ function renderKey(key) {
 }
 
 function addViewRaw(kvRoot) {
-    let viewRawButton = newToggleButton("R");
+    let viewRawButton = newToggleButton("≣");
+    viewRawButton.classList.remove("btn-icon-large");
     viewRawButton.classList.add("toggle-button", "view-raw-button");
     viewRawButton.addEventListener("click", (ev) => {
         if (viewRawButton.classList.contains("active")) {
@@ -1585,8 +1586,8 @@ function addViewRaw(kvRoot) {
 
 function addEditButton(kvRoot) {
     if (!propertyEditorState.modalElement || !propertyEditorState.textarea) return;
-    let editButton = newIconButton("E");
-    editButton.classList.add("toggle-button", "edit-button");
+    let editButton = newIconButton("✎");
+    editButton.classList.add("toggle-button", "edit-button", "btn-icon-large");
     editButton.addEventListener("click", (ev) => {
         ev.stopPropagation();
         openPropertyEditor(kvRoot);
@@ -1605,8 +1606,8 @@ function addEditButton(kvRoot) {
 
 function addDuplicateButton(kvRoot) {
     if (!kvRoot || !kvRoot.loader || !kvRoot.loader.parentLoader) return;
-    const duplicateButton = newIconButton("C");
-    duplicateButton.classList.add("toggle-button", "duplicate-button");
+    const duplicateButton = newIconButton("⎘");
+    duplicateButton.classList.add("toggle-button", "duplicate-button", "btn-icon-large");
     duplicateButton.title = "Duplicate item";
     duplicateButton.addEventListener("click", async (ev) => {
         ev.stopPropagation();
@@ -1619,7 +1620,8 @@ function addDuplicateButton(kvRoot) {
 
 function addDeleteButton(kvRoot) {
     if (!kvRoot || !kvRoot.loader || !kvRoot.loader.parentLoader) return;
-    const deleteButton = newIconButton("D");
+    const deleteButton = newIconButton("×");
+    deleteButton.classList.remove("btn-icon-large");
     deleteButton.classList.add("toggle-button", "delete-button");
     deleteButton.title = "Delete item";
     deleteButton.addEventListener("click", async (ev) => {
