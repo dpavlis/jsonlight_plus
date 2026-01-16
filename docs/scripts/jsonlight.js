@@ -23,9 +23,9 @@ let demo = {
 
 let welcome = {
     "title": "JSON Light+",
-    "description": "A JSON viewer that displays multi-line strings in its raw format!",
-    "tip": "Click the R (view raw) button in the following line",
-    "banner": "\n       _  _____  ____  _   _   _      _       _     _   \n      | |/ ____|/ __ \\| \\ | | | |    (_)     | |   | |  \n      | | (___ | |  | |  \\| | | |     _  __ _| |__ | |_ \n  _   | |\\___ \\| |  | | . ` | | |    | |/ _` | '_ \\| __|\n | |__| |____) | |__| | |\\  | | |____| | (_| | | | | |_ \n  \\____/|_____/ \\____/|_| \\_| |______|_|\\__, |_| |_|\\__|\n                                         __/ |          \n                                        |___/           \n"
+    "description": "A JSON viewer/editor that displays multi-line strings in its raw format and let's you edit it!",
+    "tip": "Click the R (view raw) button in the following line\nClick the E (edit) button to edit the value in a modal dialog\nClick [C] to duplicate the whole JSON element\nClock [D] to delete the whole JSON element",
+    "banner": "\n     _ ____   ___  _   _ _     ___      _     _            \n    | / ___| / _ \\| \\ | | |   |_ _|__ _| |__ | |_      _   \n _  | \\\\___ \\ | | |   \\ | |    | |/ _` | '_ \\| __|   _| |_ \n| |_| |___) | |_| | |\\  | |___ | | (_| | | | | |_   |_   _|\n \\___/|____/ \\___/|_| \\_|_____|___\\__, |_| |_|\\__|    |_|  \n                                  |___/                    \n"
 }
 
 /*************************************
