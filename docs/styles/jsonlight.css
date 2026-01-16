@@ -29,10 +29,14 @@ main {
 }
 
 .bulk-checkbox-wrapper {
-    display: flex;
+    display: none;
     align-items: center;
     margin-right: 0.5rem;
     flex-shrink: 0;
+}
+
+body.bulk-mode-enabled .bulk-checkbox-wrapper {
+    display: flex;
 }
 
 .bulk-checkbox-wrapper .form-check-input {

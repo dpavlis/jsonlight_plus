@@ -2204,31 +2204,55 @@ function handleBulkCheckboxChange(loader, isChecked) {
     updateBulkControls();
 }
 
-function shouldShowBulkCheckbox(loader) {
-    return bulkOperationsEnabled
-        && !!loader
-        && !!loader.parentLoader
-        && loader.parentLoader === g_currentRootLoader;
-}
-
 function attachBulkCheckboxIfNeeded(kvRoot, kvElement, kvTextElement) {
     if (!kvRoot || !kvElement || !kvTextElement) return;
     const loader = kvRoot.loader;
-    if (!shouldShowBulkCheckbox(loader)) return;
-    const wrapper = document.createElement("div");
-    wrapper.classList.add("form-check", "bulk-checkbox-wrapper");
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.classList.add("form-check-input");
-    checkbox.checked = isBulkItemSelected(loader);
-    checkbox.addEventListener("change", () => handleBulkCheckboxChange(loader, checkbox.checked));
-    wrapper.appendChild(checkbox);
-    kvElement.insertBefore(wrapper, kvTextElement);
+    if (!loader || !loader.parentLoader || loader.parentLoader !== g_currentRootLoader) return;
+    let wrapper = kvElement.querySelector(".bulk-checkbox-wrapper");
+    if (!wrapper) {
+        wrapper = document.createElement("div");
+        wrapper.classList.add("form-check", "bulk-checkbox-wrapper");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.classList.add("form-check-input");
+        checkbox.checked = isBulkItemSelected(loader);
+        checkbox.addEventListener("change", () => handleBulkCheckboxChange(loader, checkbox.checked));
+        wrapper.appendChild(checkbox);
+        kvElement.insertBefore(wrapper, kvTextElement);
+    }
+    updateBulkCheckboxState(wrapper, loader);
+}
+
+function updateBulkCheckboxState(wrapper, loader) {
+    if (!wrapper || !loader) return;
+    const checkbox = wrapper.querySelector(".form-check-input");
+    if (checkbox) {
+        checkbox.checked = isBulkItemSelected(loader);
+    }
 }
 
 function clearBulkSelectionState() {
     if (bulkSelectionState.size === 0) return;
     bulkSelectionState.clear();
+}
+
+function refreshBulkCheckboxesDisplay() {
+    const kvRoots = document.querySelectorAll("#view .kv-root");
+    kvRoots.forEach((kvRoot) => {
+        const loader = kvRoot.loader;
+        if (!loader || !loader.parentLoader || loader.parentLoader !== g_currentRootLoader) return;
+        const kv = kvRoot.querySelector(".kv");
+        const kvText = kvRoot.querySelector(".kv .kv-text");
+        if (!kv || !kvText) return;
+        attachBulkCheckboxIfNeeded(kvRoot, kv, kvText);
+    });
+}
+
+function setBulkModeClass(enabled) {
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    if (!body) return;
+    body.classList.toggle("bulk-mode-enabled", !!enabled);
 }
 
 function pruneBulkSelectionAgainstRoot() {
@@ -2265,7 +2289,8 @@ function updateBulkControls() {
     if (!allowed && bulkOperationsEnabled) {
         bulkOperationsEnabled = false;
         clearBulkSelectionState();
-        refreshBulkRendering();
+        setBulkModeClass(false);
+        refreshBulkCheckboxesDisplay();
     }
     if (bulkToggleInput) {
         bulkToggleInput.disabled = !allowed;
@@ -2276,6 +2301,10 @@ function updateBulkControls() {
     }
     if (bulkDeleteButton) {
         bulkDeleteButton.disabled = !bulkOperationsEnabled || bulkSelectionState.size === 0;
+    }
+    if (bulkSelectionCountLabel) {
+        const count = bulkOperationsEnabled ? bulkSelectionState.size : 0;
+        bulkSelectionCountLabel.textContent = String(count);
     }
 }
 
@@ -2292,15 +2321,9 @@ function setBulkOperationsEnabled(enabled) {
     if (!bulkOperationsEnabled) {
         clearBulkSelectionState();
     }
+    setBulkModeClass(bulkOperationsEnabled);
     updateBulkControls();
-    refreshBulkRendering();
-}
-
-async function refreshBulkRendering() {
-    if (!g_currentRootLoader) return;
-    const expandedPaths = captureExpandedPaths(g_currentRootLoader);
-    rerenderCurrentRoot();
-    await restoreExpandedPaths(expandedPaths);
+    refreshBulkCheckboxesDisplay();
 }
 
 async function handleBulkDeleteSelected() {
@@ -2420,6 +2443,7 @@ let lastLoadedFileName = "";
 const THEME_LIGHT = "light";
 const THEME_DARK = "dark";
 const THEME_STORAGE_KEY = "jsonlight.themePreference";
+const BULK_MODE_CLASS = "bulk-mode-enabled";
 let currentTheme = THEME_LIGHT;
 let themeToggleInput = null;
 let bulkOperationsEnabled = false;
@@ -2427,6 +2451,7 @@ const bulkSelectionState = new Map();
 let bulkToggleInput = null;
 let bulkDeleteButton = null;
 let bulkDeleteContainer = null;
+let bulkSelectionCountLabel = null;
 
 updateTopLevelNavigator();
 
@@ -3064,6 +3089,7 @@ if (editingToggle) {
 bulkToggleInput = document.querySelector("#toggle-bulk-operations");
 bulkDeleteButton = document.querySelector("#bulk-delete-selected");
 bulkDeleteContainer = document.querySelector("#bulk-operations-actions");
+bulkSelectionCountLabel = document.querySelector("#bulk-selection-count");
 if (bulkToggleInput) {
     bulkToggleInput.checked = bulkOperationsEnabled;
     bulkToggleInput.addEventListener("change", () => {

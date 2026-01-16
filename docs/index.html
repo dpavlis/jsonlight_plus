@@ -146,6 +146,10 @@
         <label class="form-check-label" for="toggle-bulk-operations">Bulk operations</label>
       </div>
       <div id="bulk-operations-actions" class="mt-2" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
+          <span>Selected items</span>
+          <span id="bulk-selection-count" aria-live="polite">0</span>
+        </div>
         <button type="button" class="btn btn-outline-danger btn-sm w-100" id="bulk-delete-selected" disabled>Delete selected</button>
       </div>
       <div class="mb-auto"></div>
