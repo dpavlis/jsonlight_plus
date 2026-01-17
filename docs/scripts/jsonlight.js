@@ -721,6 +721,41 @@ async function ensureTopLevelPageForPath(pathSegments, options = {}) {
     return ensureTopLevelPageForIndex(first, options);
 }
 
+async function refreshChildListForLoader(loader, options = {}) {
+    if (!loader) return null;
+    const pathSegments = getLoaderPathSegments(loader);
+    let kvRoot = null;
+    if (!pathSegments.length) {
+        kvRoot = document.querySelector("#view .kv-root");
+        if (!kvRoot) return null;
+    }
+    else {
+        kvRoot = await ensurePathRendered(pathSegments);
+        if (!kvRoot) return null;
+    }
+    const collapseWrapper = getCollapseWrapper(kvRoot);
+    if (!collapseWrapper) return kvRoot;
+    const childList = collapseWrapper.querySelector(".child-list");
+    if (!childList) return kvRoot;
+    const scrollContainer = document.querySelector("#view");
+    const preserveScroll = !!options.preserveScroll;
+    const scrollSnapshot = (scrollContainer && preserveScroll)
+        ? { left: scrollContainer.scrollLeft, top: scrollContainer.scrollTop }
+        : null;
+    const wasShown = collapseWrapper.classList.contains("show");
+    if (!wasShown) {
+        populateCollapseChildren(kvRoot, childList);
+    }
+    else {
+        childList.replaceChildren();
+        populateCollapseChildren(kvRoot, childList);
+    }
+    if (scrollContainer && scrollSnapshot) {
+        scrollContainer.scrollTo(scrollSnapshot.left, scrollSnapshot.top);
+    }
+    return kvRoot;
+}
+
 function updateTopLevelNavigator() {
     let mode = "none";
     let count = 0;
@@ -1337,6 +1372,30 @@ function keysEqual(a, b) {
         return Number(a) === Number(b);
     }
     return String(a) === String(b);
+}
+
+function adjustExpandedPathsForArrayInsertion(paths, parentPath, insertIndex) {
+    if (!Array.isArray(paths) || !Number.isInteger(insertIndex)) return paths;
+    const normalizedParentPath = Array.isArray(parentPath) ? parentPath : [];
+    return paths.map((path) => adjustExpandedPathForArrayInsertion(path, normalizedParentPath, insertIndex));
+}
+
+function adjustExpandedPathForArrayInsertion(path, parentPath, insertIndex) {
+    if (!Array.isArray(path)) return path;
+    if (path.length <= parentPath.length) return path;
+    for (let i = 0; i < parentPath.length; i++) {
+        if (!keysEqual(path[i], parentPath[i])) {
+            return path;
+        }
+    }
+    const childSegmentIndex = parentPath.length;
+    const childKey = path[childSegmentIndex];
+    if (typeof childKey === "number" && childKey >= insertIndex) {
+        const adjusted = [...path];
+        adjusted[childSegmentIndex] = childKey + 1;
+        return adjusted;
+    }
+    return path;
 }
 
 function setActiveSearchElement(element) {
@@ -2650,10 +2709,17 @@ updateTopLevelNavigator();
 function rerenderCurrentRoot(options = {}) {
     if (!g_currentRootLoader) return;
     const view = document.querySelector("#view");
+    const preserveScroll = !!options.preserveScroll;
+    const scrollSnapshot = (view && preserveScroll)
+        ? { left: view.scrollLeft, top: view.scrollTop }
+        : null;
     if (view) {
         view.replaceChildren();
     }
     renderJSON(g_currentRootLoader);
+    if (view && scrollSnapshot) {
+        view.scrollTo(scrollSnapshot.left, scrollSnapshot.top);
+    }
 }
 
 function cloneJsonValue(value) {
@@ -2796,15 +2862,31 @@ async function handleDuplicateNode(kvRoot) {
         return;
     }
     const parentLoader = loader.parentLoader;
-    const expandedPaths = captureExpandedPaths();
+    const parentPathSegments = getLoaderPathSegments(parentLoader);
+    const parentValue = parentLoader.getValue();
+    const scopedExpandedPaths = captureExpandedPaths(parentLoader);
     const result = duplicateLoaderChild(loader);
     if (!result.success) {
         alert("Unable to duplicate this item.");
         return;
     }
+    let expandedPathsForRestore = scopedExpandedPaths;
+    if (Array.isArray(parentValue) && Array.isArray(result.newPath)) {
+        const childSegmentIndex = parentPathSegments.length;
+        const insertedIndex = childSegmentIndex < result.newPath.length
+            ? result.newPath[childSegmentIndex]
+            : null;
+        if (Number.isInteger(insertedIndex)) {
+            expandedPathsForRestore = adjustExpandedPathsForArrayInsertion(
+                scopedExpandedPaths,
+                parentPathSegments,
+                insertedIndex
+            );
+        }
+    }
     handleValueChanged(parentLoader, { skipSearchRefresh: true });
-    rerenderCurrentRoot();
-    await restoreExpandedPaths(expandedPaths);
+    await refreshChildListForLoader(parentLoader, { preserveScroll: true });
+    await restoreExpandedPaths(expandedPathsForRestore);
     if (result.newPath) {
         await focusPathSegments(result.newPath, true);
     }
