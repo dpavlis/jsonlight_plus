@@ -1948,7 +1948,8 @@ class WebDataLoader extends DataLoader {
             return { 
                 success: false, 
                 error: exception.message,
-                type: 'JSON Parse Error'
+                type: 'JSON Parse Error',
+                context: buildJsonParseErrorContext(jsonStr, exception.message)
             };
         }
     }
@@ -2762,6 +2763,76 @@ function renderJSON(loader) {
     requestSearchRefresh();
 }
 
+const JSON_PARSE_CONTEXT_RADIUS = 50; //how many characters before/after the error position to include
+
+function tryExtractJsonErrorPosition(message, sourceText) {
+    if (!message) return null;
+    const positionMatch = message.match(/position\s+(\d+)/i);
+    if (positionMatch && positionMatch[1]) {
+        const position = Number.parseInt(positionMatch[1], 10);
+        if (Number.isFinite(position)) {
+            return position;
+        }
+    }
+    const lineColumnMatch = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+    if (lineColumnMatch && sourceText) {
+        const line = Number.parseInt(lineColumnMatch[1], 10);
+        const column = Number.parseInt(lineColumnMatch[2], 10);
+        if (Number.isFinite(line) && Number.isFinite(column)) {
+            return getOffsetForLineAndColumn(sourceText, line, column);
+        }
+    }
+    return null;
+}
+
+function getOffsetForLineAndColumn(text, targetLine, targetColumn) {
+    if (!text) return 0;
+    let line = 1;
+    let column = 1;
+    const desiredLine = Math.max(1, Number(targetLine) || 1);
+    const desiredColumn = Math.max(1, Number(targetColumn) || 1);
+    for (let i = 0; i < text.length; i++) {
+        if (line === desiredLine && column === desiredColumn) {
+            return i;
+        }
+        if (text[i] === "\n") {
+            line += 1;
+            column = 1;
+        }
+        else {
+            column += 1;
+        }
+    }
+    return text.length;
+}
+
+function buildJsonParseErrorContext(sourceText, errorMessage, radius = JSON_PARSE_CONTEXT_RADIUS) {
+    if (!sourceText || !errorMessage) return null;
+    const position = tryExtractJsonErrorPosition(errorMessage, sourceText);
+    if (position == null) return null;
+    const normalizedPosition = Math.min(Math.max(position, 0), sourceText.length);
+    const start = Math.max(0, normalizedPosition - radius);
+    const end = Math.min(sourceText.length, normalizedPosition + radius);
+    const excerpt = sourceText.slice(start, end);
+    const relativeIndex = normalizedPosition - start;
+    const highlightStart = Math.min(Math.max(relativeIndex, 0), excerpt.length);
+    const highlightEnd = relativeIndex < excerpt.length
+        ? Math.min(highlightStart + 1, excerpt.length)
+        : highlightStart;
+    const { line, column } = getLineAndColumnForOffset(sourceText, normalizedPosition);
+    return {
+        excerpt,
+        highlightStart,
+        highlightEnd,
+        absolutePosition: position,
+        line,
+        column,
+        clippedPrefix: start > 0,
+        clippedSuffix: end < sourceText.length,
+        virtualHighlight: relativeIndex >= excerpt.length
+    };
+}
+
 function displayParseError(errorInfo) {
     let errorContainer = document.createElement("div");
     errorContainer.classList.add("alert", "alert-danger", "m-3");
@@ -2775,6 +2846,25 @@ function displayParseError(errorInfo) {
     errorMessage.classList.add("mb-0");
     errorMessage.innerText = errorInfo?.error || "An unknown error occurred";
     errorContainer.appendChild(errorMessage);
+
+    if (errorInfo?.context && errorInfo.context.excerpt) {
+        const context = errorInfo.context;
+        const meta = document.createElement("p");
+        meta.classList.add("mb-1", "mt-2", "small", "text-muted");
+        meta.textContent = `Around position ${context.absolutePosition} (Ln ${context.line}, Col ${context.column})`;
+        errorContainer.appendChild(meta);
+
+        const snippet = document.createElement("pre");
+        snippet.classList.add("error-context-snippet", "p-2", "bg-light", "border", "rounded");
+        const before = context.excerpt.slice(0, context.highlightStart);
+        const highlight = context.excerpt.slice(context.highlightStart, context.highlightEnd);
+        const after = context.excerpt.slice(context.highlightEnd);
+        const prefix = context.clippedPrefix ? "&hellip;" : "";
+        const suffix = context.clippedSuffix ? "&hellip;" : "";
+        const highlightedText = highlight || (context.virtualHighlight ? "[EOF]" : "");
+        snippet.innerHTML = `${prefix}${escapeHtml(before)}<mark class="error-highlight">${escapeHtml(highlightedText)}</mark>${escapeHtml(after)}${suffix}`;
+        errorContainer.appendChild(snippet);
+    }
     
     document.querySelector("#view").appendChild(errorContainer);
     requestSearchRefresh();
