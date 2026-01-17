@@ -100,6 +100,14 @@
           <span>Total items</span>
           <span id="top-level-count">0</span>
         </div>
+        <div class="mb-2" id="top-level-pagination" hidden>
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" id="top-level-page-prev" title="Show previous page">‹ Page</button>
+            <div class="flex-grow-1 text-center small text-muted" id="top-level-page-status">Page 1 / 1</div>
+            <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" id="top-level-page-next" title="Show next page">Page ›</button>
+          </div>
+          <div class="text-center text-muted small" id="top-level-page-range">Items 1–1</div>
+        </div>
         <div class="input-group input-group-sm">
           <input type="number" class="form-control" id="top-level-index-input" min="1" step="1" placeholder="Index or line #">
           <button class="btn btn-outline-secondary" type="button" id="top-level-go" title="Jump to the specified item">Go</button>

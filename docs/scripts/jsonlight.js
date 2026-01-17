@@ -399,12 +399,27 @@ let searchRefreshHandle = null;
 let replaceInput = document.querySelector("#replace-input");
 let replaceAllButton = document.querySelector("#replace-all");
 let replaceButton = document.querySelector("#replace-current");
+const TOP_LEVEL_PAGE_SIZE = 500;
+const topLevelPaginationState = {
+    enabled: false,
+    pageSize: TOP_LEVEL_PAGE_SIZE,
+    totalItems: 0,
+    totalPages: 1,
+    currentPage: 1,
+    kvRoot: null,
+    childList: null
+};
 const topLevelState = { mode: "none", count: 0 };
 const topLevelCountLabel = document.querySelector("#top-level-count");
 const topLevelInput = document.querySelector("#top-level-index-input");
 const topLevelGoButton = document.querySelector("#top-level-go");
 const topLevelErrorLabel = document.querySelector("#top-level-error");
 const topLevelHighlightState = { kvElement: null, rootElement: null, timeoutHandle: null };
+const topLevelPageContainer = document.querySelector("#top-level-pagination");
+const topLevelPageStatusLabel = document.querySelector("#top-level-page-status");
+const topLevelPageRangeLabel = document.querySelector("#top-level-page-range");
+const topLevelPagePrevButton = document.querySelector("#top-level-page-prev");
+const topLevelPageNextButton = document.querySelector("#top-level-page-next");
 const searchHistoryList = document.querySelector("#search-history-options");
 const replaceHistoryList = document.querySelector("#replace-history-options");
 const SEARCH_HISTORY_STORAGE_KEY = "jsonlight.searchHistory";
@@ -428,6 +443,16 @@ if (topLevelInput) {
         }
     });
     topLevelInput.addEventListener("input", () => setTopLevelError(""));
+}
+if (topLevelPagePrevButton) {
+    topLevelPagePrevButton.addEventListener("click", () => {
+        changeTopLevelPage(-1);
+    });
+}
+if (topLevelPageNextButton) {
+    topLevelPageNextButton.addEventListener("click", () => {
+        changeTopLevelPage(1);
+    });
 }
 
 function requestSearchRefresh() {
@@ -544,6 +569,158 @@ function applyTopLevelHighlight(kvElement, rootElement, durationMs = 4000) {
     }, durationMs);
 }
 
+function resetTopLevelPaginationState() {
+    topLevelPaginationState.enabled = false;
+    topLevelPaginationState.totalItems = 0;
+    topLevelPaginationState.totalPages = 1;
+    topLevelPaginationState.currentPage = 1;
+    topLevelPaginationState.kvRoot = null;
+    topLevelPaginationState.childList = null;
+    updateTopLevelPaginationControls();
+}
+
+function initializeTopLevelPagination(kvRoot) {
+    if (!kvRoot || topLevelState.mode !== "json-array" || topLevelState.count <= TOP_LEVEL_PAGE_SIZE) {
+        resetTopLevelPaginationState();
+        return;
+    }
+    const previousPage = topLevelPaginationState.enabled ? topLevelPaginationState.currentPage : 1;
+    topLevelPaginationState.enabled = true;
+    topLevelPaginationState.pageSize = TOP_LEVEL_PAGE_SIZE;
+    topLevelPaginationState.totalItems = topLevelState.count;
+    topLevelPaginationState.totalPages = Math.max(1, Math.ceil(topLevelPaginationState.totalItems / topLevelPaginationState.pageSize));
+    topLevelPaginationState.currentPage = Math.min(Math.max(previousPage, 1), topLevelPaginationState.totalPages);
+    topLevelPaginationState.kvRoot = kvRoot;
+    topLevelPaginationState.childList = null;
+    updateTopLevelPaginationControls();
+}
+
+function getTopLevelPageRange(pageNumber) {
+    const safeTotal = Math.max(topLevelPaginationState.totalItems, 0);
+    if (!topLevelPaginationState.enabled || safeTotal === 0) {
+        return { start: 0, end: 0 };
+    }
+    const pageSize = topLevelPaginationState.pageSize || TOP_LEVEL_PAGE_SIZE;
+    const clampedPage = Math.min(Math.max(pageNumber, 1), topLevelPaginationState.totalPages || 1);
+    const startIndex = (clampedPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, safeTotal);
+    return {
+        start: startIndex + 1,
+        end: endIndex
+    };
+}
+
+function updateTopLevelPaginationControls() {
+    if (!topLevelPageContainer) return;
+    if (!topLevelPaginationState.enabled) {
+        topLevelPageContainer.hidden = true;
+        if (topLevelPageStatusLabel) topLevelPageStatusLabel.textContent = "";
+        if (topLevelPageRangeLabel) topLevelPageRangeLabel.textContent = "";
+        if (topLevelPagePrevButton) topLevelPagePrevButton.disabled = true;
+        if (topLevelPageNextButton) topLevelPageNextButton.disabled = true;
+        return;
+    }
+    topLevelPageContainer.hidden = false;
+    if (topLevelPageStatusLabel) {
+        topLevelPageStatusLabel.textContent = `Page ${topLevelPaginationState.currentPage} / ${topLevelPaginationState.totalPages}`;
+    }
+    if (topLevelPageRangeLabel) {
+        const range = getTopLevelPageRange(topLevelPaginationState.currentPage);
+        topLevelPageRangeLabel.textContent = range.start === 0 && range.end === 0
+            ? "Items 0 of 0"
+            : `Items ${range.start}–${range.end} of ${topLevelPaginationState.totalItems}`;
+    }
+    if (topLevelPagePrevButton) {
+        topLevelPagePrevButton.disabled = topLevelPaginationState.currentPage <= 1;
+    }
+    if (topLevelPageNextButton) {
+        topLevelPageNextButton.disabled = topLevelPaginationState.currentPage >= topLevelPaginationState.totalPages;
+    }
+}
+
+function getPageForTopLevelIndex(index) {
+    const pageSize = topLevelPaginationState.pageSize || TOP_LEVEL_PAGE_SIZE;
+    if (!Number.isFinite(index) || index < 0) return 1;
+    return Math.floor(index / pageSize) + 1;
+}
+
+async function changeTopLevelPage(delta) {
+    if (!topLevelPaginationState.enabled || !delta) return;
+    const targetPage = Math.min(
+        Math.max(topLevelPaginationState.currentPage + delta, 1),
+        topLevelPaginationState.totalPages
+    );
+    if (targetPage === topLevelPaginationState.currentPage) {
+        return;
+    }
+    if (topLevelPagePrevButton) topLevelPagePrevButton.disabled = true;
+    if (topLevelPageNextButton) topLevelPageNextButton.disabled = true;
+    try {
+        await renderTopLevelPage(targetPage);
+    }
+    finally {
+        updateTopLevelPaginationControls();
+    }
+}
+
+async function renderTopLevelPage(pageNumber, options = {}) {
+    if (!topLevelPaginationState.enabled) return false;
+    const kvRoot = topLevelPaginationState.kvRoot;
+    if (!kvRoot || !kvRoot.loader) return false;
+    const collapseWrapper = kvRoot.querySelector(".collapse");
+    if (!collapseWrapper) return false;
+    const childList = options.childListOverride || collapseWrapper.querySelector(".child-list");
+    if (!childList) return false;
+
+    const pageSize = topLevelPaginationState.pageSize || TOP_LEVEL_PAGE_SIZE;
+    const children = kvRoot.loader.getChild();
+    const totalItems = Math.max(children.length, 0);
+    topLevelPaginationState.totalItems = totalItems;
+    topLevelPaginationState.totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    let targetPage = Math.min(Math.max(pageNumber, 1), topLevelPaginationState.totalPages);
+    const startIndex = Math.max(0, (targetPage - 1) * pageSize);
+    const endIndex = Math.min(startIndex + pageSize, children.length);
+
+    const fragment = document.createDocumentFragment();
+    for (let i = startIndex; i < endIndex; i++) {
+        const childKV = children[i];
+        if (!childKV) continue;
+        const [key, loader] = childKV;
+        fragment.appendChild(renderKV(key, loader));
+    }
+    childList.replaceChildren(fragment);
+    topLevelPaginationState.childList = childList;
+    const previousPage = topLevelPaginationState.currentPage;
+    topLevelPaginationState.currentPage = targetPage;
+    updateTopLevelPaginationControls();
+
+    if (options.forceCollapseAll) {
+        collapseAll();
+    }
+    else if (options.applyExpandCollapseMode !== false && expandCollapseToggleState === "expanded") {
+        await expandAll();
+    }
+    return previousPage !== targetPage;
+}
+
+async function ensureTopLevelPageForIndex(index, options = {}) {
+    if (!topLevelPaginationState.enabled) return false;
+    if (!Number.isFinite(index) || index < 0) return false;
+    const targetPage = getPageForTopLevelIndex(index);
+    if (targetPage === topLevelPaginationState.currentPage && !options.forceRerender) {
+        return false;
+    }
+    await renderTopLevelPage(targetPage, options);
+    return true;
+}
+
+async function ensureTopLevelPageForPath(pathSegments, options = {}) {
+    if (!Array.isArray(pathSegments) || pathSegments.length === 0) return false;
+    const first = pathSegments[0];
+    if (typeof first !== "number") return false;
+    return ensureTopLevelPageForIndex(first, options);
+}
+
 function updateTopLevelNavigator() {
     let mode = "none";
     let count = 0;
@@ -639,10 +816,20 @@ async function handleTopLevelJump() {
 }
 
 async function jumpToArrayIndex(index) {
+    const switchedPage = await ensureTopLevelPageForIndex(index, {
+        forceCollapseAll: true,
+        applyExpandCollapseMode: false
+    });
+    if (switchedPage) {
+        setExpandCollapseToggleState(false);
+    }
     const kvRoot = await ensurePathRendered([index]);
     if (!kvRoot) {
         setTopLevelError("Unable to locate that array item.");
         return;
+    }
+    if (switchedPage) {
+        await expandKvRoot(kvRoot);
     }
     focusKvRoot(kvRoot, true);
 }
@@ -1088,6 +1275,9 @@ function pathsEqual(pathA, pathB) {
 async function ensurePathRendered(pathSegments) {
     const rootKvRoot = document.querySelector("#view .kv-root");
     if (!rootKvRoot) return null;
+    if (Array.isArray(pathSegments) && pathSegments.length > 0) {
+        await ensureTopLevelPageForPath(pathSegments);
+    }
     if (!pathSegments || pathSegments.length === 0) {
         await expandKvRoot(rootKvRoot);
         return rootKvRoot;
@@ -1618,6 +1808,14 @@ function addCollapse(kvRoot, dataRef) {
 
 function populateCollapseChildren(kvRoot, childList) {
     if (!kvRoot || !kvRoot.loader || !childList) return;
+    if (topLevelPaginationState.enabled && kvRoot === topLevelPaginationState.kvRoot) {
+        renderTopLevelPage(topLevelPaginationState.currentPage, {
+            childListOverride: childList,
+            applyExpandCollapseMode: false,
+            forceRerender: true
+        });
+        return;
+    }
     if (childList.childElementCount > 0) return;
     const fragment = document.createDocumentFragment();
     for (const childKV of kvRoot.loader.getChild()) {
@@ -2615,6 +2813,7 @@ async function handleDuplicateNode(kvRoot) {
 function setCurrentRootLoader(loader, mode) {
     g_currentRootLoader = loader;
     g_currentMode = mode;
+    resetTopLevelPaginationState();
     clearBulkSelectionState();
     updateBulkControls();
     updateDownloadButtons();
@@ -2749,6 +2948,7 @@ function newDataLoader() {
 function renderJSON(loader) {
     let rootJson = renderKV(null, loader);
     document.querySelector("#view").appendChild(rootJson);
+    initializeTopLevelPagination(rootJson);
     let rootButton = rootJson.querySelector(".collapse-button");
     if (rootButton) {
         rootButton.style.display = "none";
