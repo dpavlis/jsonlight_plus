@@ -53,8 +53,25 @@
         </div>
       </div>
       <div class="mb-3">
-        <label for="filepicker" class="form-label">Open file</label>
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <label for="filepicker" class="form-label mb-0 flex-grow-1">Open file / Paste here</label>
+          <button
+            class="btn btn-light btn-sm btn-icon toggle-button"
+            type="button"
+            id="paste-toggle-button"
+            data-bs-toggle="collapse"
+            data-bs-target="#paste-collapse"
+            aria-expanded="false"
+            aria-controls="paste-collapse"
+            title="Show or hide the paste area"
+          >
+            +
+          </button>
+        </div>
         <input type="file" class="form-control form-control-sm" id="filepicker" name="filepicker" accept=".json, .geojson" title="Choose a file to load">
+        <div class="collapse mt-2" id="paste-collapse">
+          <textarea class="form-control form-control-sm" id="paste" rows="10"></textarea>
+        </div>
       </div>
       <div id="jsonl-controls" class="mb-2" style="display: none;">
         <div class="d-flex align-items-center gap-2 mb-2">
@@ -71,15 +88,7 @@
       <div class="mb-3">
         <button type="button" class="btn btn-outline-success btn-sm w-100" id="download-data" disabled title="Download the current data">Save JSON</button>
       </div>
-      <div class="mt-3">
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <label for="paste" class="form-label mb-0 flex-grow-1">Paste here</label>
-          <button class="btn btn-light btn-sm toggle-button" type="button" id="paste-toggle-button" data-bs-toggle="collapse" data-bs-target="#paste-collapse" aria-expanded="false" aria-controls="paste-collapse" title="Show or hide the paste area">+</button>
-        </div>
-        <div class="collapse" id="paste-collapse">
-          <textarea class="form-control form-control-sm" id="paste" rows="10"></textarea>
-        </div>
-      </div>
+      
       <div class="mt-3">
         <div class="d-flex">
           <button
@@ -101,9 +110,28 @@
         </div>
         <div class="mb-2" id="top-level-pagination" hidden>
           <div class="d-flex align-items-center gap-2 mb-1">
-            <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" id="top-level-page-prev" title="Show previous page">‹ Page</button>
-            <div class="flex-grow-1 text-center small text-muted" id="top-level-page-status">Page 1 / 1</div>
-            <button class="btn btn-outline-secondary btn-sm flex-fill" type="button" id="top-level-page-next" title="Show next page">Page ›</button>
+            <button
+              class="btn btn-light btn-sm btn-icon btn-icon-large toggle-button"
+              type="button"
+              id="top-level-page-prev"
+              title="Show previous page"
+              aria-label="Previous page"
+            >
+              ◂
+            </button>
+            <div class="flex-grow-1 text-center small text-muted d-flex flex-column align-items-center">
+              <span>Page</span>
+              <span id="top-level-page-status">1 / 1</span>
+            </div>
+            <button
+              class="btn btn-light btn-sm btn-icon btn-icon-large toggle-button"
+              type="button"
+              id="top-level-page-next"
+              title="Show next page"
+              aria-label="Next page"
+            >
+              ▸
+            </button>
           </div>
           <div class="text-center text-muted small" id="top-level-page-range">Items 1–1</div>
         </div>

@@ -625,7 +625,7 @@ function updateTopLevelPaginationControls() {
     }
     topLevelPageContainer.hidden = false;
     if (topLevelPageStatusLabel) {
-        topLevelPageStatusLabel.textContent = `Page ${topLevelPaginationState.currentPage} / ${topLevelPaginationState.totalPages}`;
+        topLevelPageStatusLabel.textContent = `${topLevelPaginationState.currentPage} / ${topLevelPaginationState.totalPages}`;
     }
     if (topLevelPageRangeLabel) {
         const range = getTopLevelPageRange(topLevelPaginationState.currentPage);
