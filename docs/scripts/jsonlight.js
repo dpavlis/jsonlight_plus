@@ -33,6 +33,7 @@ let welcome = {
  *************************************/
 const propertyEditorState = {
     modalElement: document.querySelector("#property-editor-modal"),
+    dialog: document.querySelector("#property-editor-modal .property-editor-dialog"),
     textarea: document.querySelector("#property-editor-input"),
     pathLabel: document.querySelector("#property-editor-path"),
     positionLabel: document.querySelector("#property-editor-caret"),
@@ -45,6 +46,7 @@ const propertyEditorState = {
     searchStatusLabel: document.querySelector("#property-editor-search-status"),
     searchErrorLabel: document.querySelector("#property-editor-search-error"),
     applyButton: document.querySelector("#property-editor-apply"),
+    resizeHandle: document.querySelector("#property-editor-resize-handle"),
     modal: null,
     currentKvRoot: null,
     caretUpdateHandle: null,
@@ -66,6 +68,35 @@ const propertyEditorDragState = {
     initialized: false
 };
 
+const PROPERTY_EDITOR_MIN_WIDTH = 460;
+const PROPERTY_EDITOR_MIN_HEIGHT = 320;
+const PROPERTY_EDITOR_MAX_WIDTH = 1400;
+const PROPERTY_EDITOR_MAX_HEIGHT = 1100;
+const PROPERTY_EDITOR_MAX_WIDTH_RATIO = 0.95;
+const PROPERTY_EDITOR_MAX_HEIGHT_RATIO = 0.9;
+const PROPERTY_EDITOR_LAYOUT_STORAGE_KEY = "jsonlight.propertyEditorLayout";
+const PROPERTY_EDITOR_VIEWPORT_MARGIN = 24;
+
+const propertyEditorResizeState = {
+    dialog: null,
+    handle: null,
+    resizing: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startWidth: 0,
+    startHeight: 0,
+    initialized: false
+};
+
+const propertyEditorLayoutState = {
+    width: null,
+    height: null,
+    translateX: 0,
+    translateY: 0,
+    loaded: false
+};
+
 function initializePropertyEditorDragSupport() {
     if (propertyEditorDragState.initialized || !propertyEditorState.modalElement) return;
     const dialog = propertyEditorState.modalElement.querySelector(".modal-dialog");
@@ -75,8 +106,9 @@ function initializePropertyEditorDragSupport() {
     propertyEditorDragState.header = header;
     header.style.cursor = "move";
     header.addEventListener("mousedown", handlePropertyEditorDragStart);
-    propertyEditorState.modalElement.addEventListener("shown.bs.modal", resetPropertyEditorDragPosition);
-    propertyEditorState.modalElement.addEventListener("hidden.bs.modal", resetPropertyEditorDragPosition);
+    propertyEditorState.modalElement.addEventListener("hidden.bs.modal", () => {
+        resetPropertyEditorDragPosition({ preserveTransform: true });
+    });
     propertyEditorDragState.initialized = true;
 }
 
@@ -108,6 +140,8 @@ function handlePropertyEditorDragEnd() {
     propertyEditorDragState.dragging = false;
     document.removeEventListener("mousemove", handlePropertyEditorDragMove);
     document.removeEventListener("mouseup", handlePropertyEditorDragEnd);
+    clampPropertyEditorDialogPosition({ force: true });
+    recordPropertyEditorDialogTransform();
 }
 
 function applyPropertyEditorDragTransform() {
@@ -115,17 +149,314 @@ function applyPropertyEditorDragTransform() {
     propertyEditorDragState.dialog.style.transform = `translate(${propertyEditorDragState.currentX}px, ${propertyEditorDragState.currentY}px)`;
 }
 
-function resetPropertyEditorDragPosition() {
-    propertyEditorDragState.currentX = 0;
-    propertyEditorDragState.currentY = 0;
-    if (propertyEditorDragState.dialog) {
-        propertyEditorDragState.dialog.style.transform = "";
+function resetPropertyEditorDragPosition(options = {}) {
+    const preserveTransform = !!options.preserveTransform;
+    if (!preserveTransform) {
+        propertyEditorDragState.currentX = 0;
+        propertyEditorDragState.currentY = 0;
+        if (propertyEditorDragState.dialog) {
+            propertyEditorDragState.dialog.style.transform = "";
+        }
+        recordPropertyEditorDialogTransform();
     }
     if (propertyEditorDragState.dragging) {
         propertyEditorDragState.dragging = false;
         document.removeEventListener("mousemove", handlePropertyEditorDragMove);
         document.removeEventListener("mouseup", handlePropertyEditorDragEnd);
     }
+}
+
+function initializePropertyEditorResizeSupport() {
+    if (propertyEditorResizeState.initialized) return;
+    if (!propertyEditorState.modalElement) return;
+    const dialog = propertyEditorState.dialog || propertyEditorState.modalElement.querySelector(".property-editor-dialog");
+    const handle = propertyEditorState.resizeHandle;
+    if (!dialog || !handle) return;
+    propertyEditorResizeState.dialog = dialog;
+    propertyEditorResizeState.handle = handle;
+    propertyEditorResizeState.initialized = true;
+    handle.addEventListener("pointerdown", handlePropertyEditorResizeStart);
+    propertyEditorState.modalElement.addEventListener("hidden.bs.modal", () => {
+        endPropertyEditorResizeSession();
+    });
+    if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("resize", () => {
+            if (propertyEditorState.modalElement && propertyEditorState.modalElement.classList.contains("show")) {
+                clampPropertyEditorDialogSize({ force: true });
+                clampPropertyEditorDialogPosition({ force: true });
+            }
+        });
+    }
+}
+
+function getPropertyEditorSizeBounds() {
+    const baseWidth = typeof window !== "undefined" && typeof window.innerWidth === "number"
+        ? window.innerWidth
+        : (document.documentElement ? document.documentElement.clientWidth : PROPERTY_EDITOR_MIN_WIDTH);
+    const baseHeight = typeof window !== "undefined" && typeof window.innerHeight === "number"
+        ? window.innerHeight
+        : (document.documentElement ? document.documentElement.clientHeight : PROPERTY_EDITOR_MIN_HEIGHT);
+    const viewportWidth = Math.max(baseWidth || PROPERTY_EDITOR_MIN_WIDTH, PROPERTY_EDITOR_MIN_WIDTH);
+    const viewportHeight = Math.max(baseHeight || PROPERTY_EDITOR_MIN_HEIGHT, PROPERTY_EDITOR_MIN_HEIGHT);
+    const maxWidth = Math.max(Math.min(viewportWidth * PROPERTY_EDITOR_MAX_WIDTH_RATIO, PROPERTY_EDITOR_MAX_WIDTH), PROPERTY_EDITOR_MIN_WIDTH);
+    const maxHeight = Math.max(Math.min(viewportHeight * PROPERTY_EDITOR_MAX_HEIGHT_RATIO, PROPERTY_EDITOR_MAX_HEIGHT), PROPERTY_EDITOR_MIN_HEIGHT);
+    return {
+        minWidth: Math.min(PROPERTY_EDITOR_MIN_WIDTH, maxWidth),
+        minHeight: Math.min(PROPERTY_EDITOR_MIN_HEIGHT, maxHeight),
+        maxWidth,
+        maxHeight
+    };
+}
+
+function handlePropertyEditorResizeStart(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!propertyEditorResizeState.dialog) return;
+    event.preventDefault();
+    propertyEditorResizeState.resizing = true;
+    propertyEditorResizeState.pointerId = typeof event.pointerId === "number" ? event.pointerId : null;
+    propertyEditorResizeState.startX = event.clientX;
+    propertyEditorResizeState.startY = event.clientY;
+    const rect = propertyEditorResizeState.dialog.getBoundingClientRect();
+    propertyEditorResizeState.startWidth = rect.width;
+    propertyEditorResizeState.startHeight = rect.height;
+    document.addEventListener("pointermove", handlePropertyEditorResizeMove);
+    document.addEventListener("pointerup", handlePropertyEditorResizeEnd);
+    document.addEventListener("pointercancel", handlePropertyEditorResizeEnd);
+    if (document.body) {
+        document.body.classList.add("property-editor-resizing");
+    }
+    if (propertyEditorResizeState.handle && typeof propertyEditorResizeState.handle.setPointerCapture === "function" && propertyEditorResizeState.pointerId !== null) {
+        try {
+            propertyEditorResizeState.handle.setPointerCapture(propertyEditorResizeState.pointerId);
+        }
+        catch (error) {
+            console.warn("Unable to capture pointer for property editor resize", error);
+        }
+    }
+}
+
+function handlePropertyEditorResizeMove(event) {
+    if (!propertyEditorResizeState.resizing) return;
+    if (propertyEditorResizeState.pointerId !== null && event.pointerId !== propertyEditorResizeState.pointerId) return;
+    const bounds = getPropertyEditorSizeBounds();
+    const deltaX = event.clientX - propertyEditorResizeState.startX;
+    const deltaY = event.clientY - propertyEditorResizeState.startY;
+    const width = Math.min(Math.max(propertyEditorResizeState.startWidth + deltaX, bounds.minWidth), bounds.maxWidth);
+    const height = Math.min(Math.max(propertyEditorResizeState.startHeight + deltaY, bounds.minHeight), bounds.maxHeight);
+    propertyEditorResizeState.dialog.style.width = `${width}px`;
+    propertyEditorResizeState.dialog.style.height = `${height}px`;
+}
+
+function handlePropertyEditorResizeEnd(event) {
+    if (!propertyEditorResizeState.resizing) return;
+    if (propertyEditorResizeState.pointerId !== null && event.pointerId !== propertyEditorResizeState.pointerId) return;
+    if (propertyEditorResizeState.handle && typeof propertyEditorResizeState.handle.releasePointerCapture === "function" && propertyEditorResizeState.pointerId !== null) {
+        try {
+            propertyEditorResizeState.handle.releasePointerCapture(propertyEditorResizeState.pointerId);
+        }
+        catch (error) {
+            console.warn("Unable to release pointer for property editor resize", error);
+        }
+    }
+    endPropertyEditorResizeSession();
+    clampPropertyEditorDialogSize({ force: true });
+    clampPropertyEditorDialogPosition({ force: true });
+    recordPropertyEditorDialogSize();
+}
+
+function endPropertyEditorResizeSession() {
+    if (propertyEditorResizeState.resizing) {
+        propertyEditorResizeState.resizing = false;
+        document.removeEventListener("pointermove", handlePropertyEditorResizeMove);
+        document.removeEventListener("pointerup", handlePropertyEditorResizeEnd);
+        document.removeEventListener("pointercancel", handlePropertyEditorResizeEnd);
+    }
+    if (document.body) {
+        document.body.classList.remove("property-editor-resizing");
+    }
+    propertyEditorResizeState.pointerId = null;
+}
+
+function clampPropertyEditorDialogSize(options = {}) {
+    const dialog = propertyEditorResizeState.dialog;
+    if (!dialog) return;
+    const hasInlineSize = dialog.style.width || dialog.style.height;
+    if (!options.force && !hasInlineSize) return;
+    const bounds = getPropertyEditorSizeBounds();
+    const rect = dialog.getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, bounds.minWidth), bounds.maxWidth);
+    const height = Math.min(Math.max(rect.height, bounds.minHeight), bounds.maxHeight);
+    const widthChanged = Math.abs(width - rect.width) > 0.5;
+    const heightChanged = Math.abs(height - rect.height) > 0.5;
+    if (widthChanged || heightChanged || options.force) {
+        dialog.style.width = `${width}px`;
+        dialog.style.height = `${height}px`;
+        persistPropertyEditorLayout({ width, height });
+    }
+}
+
+function clampPropertyEditorDialogPosition(options = {}) {
+    const dialog = propertyEditorResizeState.dialog;
+    if (!dialog) return;
+    const viewportWidth = typeof window !== "undefined"
+        ? (window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : null))
+        : null;
+    const viewportHeight = typeof window !== "undefined"
+        ? (window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : null))
+        : null;
+    if (!viewportWidth || !viewportHeight) return;
+    const margin = typeof options.margin === "number" ? options.margin : PROPERTY_EDITOR_VIEWPORT_MARGIN;
+    const rect = dialog.getBoundingClientRect();
+    let offsetX = propertyEditorDragState.currentX;
+    let offsetY = propertyEditorDragState.currentY;
+    let changed = false;
+    if (rect.left < margin) {
+        offsetX += margin - rect.left;
+        changed = true;
+    }
+    if (rect.right > viewportWidth - margin) {
+        offsetX -= rect.right - (viewportWidth - margin);
+        changed = true;
+    }
+    if (rect.top < margin) {
+        offsetY += margin - rect.top;
+        changed = true;
+    }
+    if (rect.bottom > viewportHeight - margin) {
+        offsetY -= rect.bottom - (viewportHeight - margin);
+        changed = true;
+    }
+    if (changed) {
+        propertyEditorDragState.currentX = offsetX;
+        propertyEditorDragState.currentY = offsetY;
+        applyPropertyEditorDragTransform();
+        recordPropertyEditorDialogTransform();
+    }
+    else if (options.force) {
+        recordPropertyEditorDialogTransform();
+    }
+}
+
+function recordPropertyEditorDialogSize() {
+    const dialog = propertyEditorResizeState.dialog;
+    if (!dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    persistPropertyEditorLayout({ width: rect.width, height: rect.height });
+}
+
+function recordPropertyEditorDialogTransform() {
+    persistPropertyEditorLayout({
+        translateX: propertyEditorDragState.currentX || 0,
+        translateY: propertyEditorDragState.currentY || 0
+    });
+}
+
+function getPropertyEditorStorage() {
+    if (typeof window === "undefined") return null;
+    try {
+        return window.localStorage || null;
+    }
+    catch (error) {
+        console.warn("Local storage unavailable for property editor layout", error);
+        return null;
+    }
+}
+
+function loadPropertyEditorLayoutFromStorage() {
+    if (propertyEditorLayoutState.loaded) {
+        return propertyEditorLayoutState;
+    }
+    propertyEditorLayoutState.loaded = true;
+    const storage = getPropertyEditorStorage();
+    if (!storage) {
+        return propertyEditorLayoutState;
+    }
+    try {
+        const raw = storage.getItem(PROPERTY_EDITOR_LAYOUT_STORAGE_KEY);
+        if (!raw) {
+            return propertyEditorLayoutState;
+        }
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+            if (typeof parsed.width === "number") propertyEditorLayoutState.width = parsed.width;
+            if (typeof parsed.height === "number") propertyEditorLayoutState.height = parsed.height;
+            if (typeof parsed.translateX === "number") propertyEditorLayoutState.translateX = parsed.translateX;
+            if (typeof parsed.translateY === "number") propertyEditorLayoutState.translateY = parsed.translateY;
+        }
+    }
+    catch (error) {
+        console.warn("Unable to load property editor layout", error);
+    }
+    return propertyEditorLayoutState;
+}
+
+function persistPropertyEditorLayout(partial = {}) {
+    loadPropertyEditorLayoutFromStorage();
+    const nextState = { ...propertyEditorLayoutState };
+    let changed = false;
+    ["width", "height", "translateX", "translateY"].forEach((key) => {
+        if (!(key in partial)) return;
+        let value = partial[key];
+        if (typeof value === "number" && Number.isFinite(value)) {
+            value = Math.round(value);
+        }
+        else if (value !== null) {
+            return;
+        }
+        if (nextState[key] !== value) {
+            nextState[key] = value;
+            changed = true;
+        }
+    });
+    if (!changed) {
+        return;
+    }
+    Object.assign(propertyEditorLayoutState, nextState);
+    const storage = getPropertyEditorStorage();
+    if (!storage) {
+        return;
+    }
+    try {
+        storage.setItem(
+            PROPERTY_EDITOR_LAYOUT_STORAGE_KEY,
+            JSON.stringify({
+                width: propertyEditorLayoutState.width,
+                height: propertyEditorLayoutState.height,
+                translateX: propertyEditorLayoutState.translateX,
+                translateY: propertyEditorLayoutState.translateY
+            })
+        );
+    }
+    catch (error) {
+        console.warn("Unable to persist property editor layout", error);
+    }
+}
+
+function applyStoredPropertyEditorLayout() {
+    loadPropertyEditorLayoutFromStorage();
+    const modal = propertyEditorState.modalElement;
+    if (!modal) return;
+    const dialog = propertyEditorResizeState.dialog || modal.querySelector(".property-editor-dialog");
+    if (!dialog) return;
+    propertyEditorState.dialog = dialog;
+    propertyEditorResizeState.dialog = dialog;
+    propertyEditorDragState.dialog = dialog;
+    if (typeof propertyEditorLayoutState.width === "number") {
+        dialog.style.width = `${propertyEditorLayoutState.width}px`;
+    }
+    if (typeof propertyEditorLayoutState.height === "number") {
+        dialog.style.height = `${propertyEditorLayoutState.height}px`;
+    }
+    propertyEditorDragState.currentX = typeof propertyEditorLayoutState.translateX === "number"
+        ? propertyEditorLayoutState.translateX
+        : 0;
+    propertyEditorDragState.currentY = typeof propertyEditorLayoutState.translateY === "number"
+        ? propertyEditorLayoutState.translateY
+        : 0;
+    applyPropertyEditorDragTransform();
+    clampPropertyEditorDialogSize({ force: true });
+    clampPropertyEditorDialogPosition({ force: true });
 }
 
 function getLineAndColumnForOffset(text, offset) {
@@ -300,6 +631,7 @@ function handlePropertyEditorReplaceAll() {
 if (propertyEditorState.modalElement) {
     propertyEditorState.modal = new bootstrap.Modal(propertyEditorState.modalElement);
     propertyEditorState.modalElement.addEventListener("shown.bs.modal", () => {
+        applyStoredPropertyEditorLayout();
         if (!propertyEditorState.textarea) return;
         propertyEditorState.textarea.focus();
         propertyEditorState.textarea.select();
@@ -318,6 +650,7 @@ if (propertyEditorState.modalElement) {
 }
 
 initializePropertyEditorDragSupport();
+initializePropertyEditorResizeSupport();
 
 if (propertyEditorState.applyButton) {
     propertyEditorState.applyButton.addEventListener("click", () => {

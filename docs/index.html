@@ -248,15 +248,15 @@
     </div>
 
     <div class="modal fade" id="property-editor-modal" tabindex="-1" aria-labelledby="property-editor-title" aria-hidden="true">
-      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable property-editor-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="property-editor-title">Property Editor</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" title="Close"></button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body property-editor-body">
             <div class="mb-2 text-muted small" id="property-editor-path">root</div>
-            <textarea class="form-control font-monospace" id="property-editor-input" rows="18"></textarea>
+            <textarea class="form-control font-monospace property-editor-input" id="property-editor-input" rows="18"></textarea>
             <div class="d-flex justify-content-between align-items-center mt-2 small text-muted">
               <span id="property-editor-caret">Ln 1, Col 1</span>
             </div>
@@ -278,10 +278,11 @@
               <div class="text-danger small" id="property-editor-search-error"></div>
             </div>
           </div>
-          <div class="modal-footer">
+          <div class="modal-footer property-editor-footer">
             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" title="Discard changes">Cancel</button>
             <button type="button" class="btn btn-primary" id="property-editor-apply" title="Apply edits">Apply</button>
           </div>
+          <div class="property-editor-resize-handle" id="property-editor-resize-handle" aria-hidden="true" title="Resize editor"></div>
         </div>
       </div>
     </div>
