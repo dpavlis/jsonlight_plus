@@ -3266,6 +3266,9 @@ function updateBulkControls() {
     if (bulkDeleteButton) {
         bulkDeleteButton.disabled = !bulkOperationsEnabled || bulkSelectionState.size === 0;
     }
+    if (bulkExportButton) {
+        bulkExportButton.disabled = !bulkOperationsEnabled || bulkSelectionState.size === 0;
+    }
     if (bulkSelectionCountLabel) {
         const count = bulkOperationsEnabled ? bulkSelectionState.size : 0;
         bulkSelectionCountLabel.textContent = String(count);
@@ -3333,6 +3336,103 @@ async function handleBulkDeleteSelected() {
     rerenderCurrentRoot();
     await restoreExpandedPaths(expandedPaths);
     updateBulkControls();
+}
+
+function collectBulkSelectedEntries(rootValue) {
+    if (rootValue == null || typeof rootValue !== "object") return [];
+    if (Array.isArray(rootValue)) {
+        const selectedIndexes = new Set(
+            Array.from(bulkSelectionState.values())
+                .map((value) => Number(value))
+                .filter((value) => Number.isInteger(value))
+        );
+        const entries = [];
+        rootValue.forEach((value, index) => {
+            if (selectedIndexes.has(index)) {
+                entries.push({ key: index, value });
+            }
+        });
+        return entries;
+    }
+    const selectedKeys = new Set(
+        Array.from(bulkSelectionState.values())
+            .map((value) => (value == null ? null : value.toString()))
+            .filter((value) => typeof value === "string")
+    );
+    const entries = [];
+    Object.keys(rootValue).forEach((key) => {
+        if (selectedKeys.has(key)) {
+            entries.push({ key, value: rootValue[key] });
+        }
+    });
+    return entries;
+}
+
+function buildBulkExportJson(entries, isArrayRoot) {
+    if (!entries || entries.length === 0) return null;
+    if (isArrayRoot) {
+        const payload = entries.map(({ value }) => cloneJsonValue(value));
+        return JSON.stringify(payload, null, 2);
+    }
+    const payload = {};
+    entries.forEach(({ key, value }) => {
+        payload[key] = cloneJsonValue(value);
+    });
+    return JSON.stringify(payload, null, 2);
+}
+
+function buildBulkExportJsonl(entries, isArrayRoot) {
+    if (!entries || entries.length === 0) return null;
+    const lines = entries.map(({ key, value }) => {
+        if (isArrayRoot) {
+            return JSON.stringify(cloneJsonValue(value));
+        }
+        const wrapper = {};
+        wrapper[key] = cloneJsonValue(value);
+        return JSON.stringify(wrapper);
+    });
+    return lines.join("\n");
+}
+
+async function handleBulkExportSelected() {
+    if (!bulkOperationsEnabled) return;
+    pruneBulkSelectionAgainstRoot();
+    if (bulkSelectionState.size === 0) {
+        updateBulkControls();
+        alert("Select at least one item to export.");
+        return;
+    }
+    if (!g_currentRootLoader) return;
+    const rootValue = g_currentRootLoader.getValue();
+    if (rootValue == null || typeof rootValue !== "object") {
+        alert("Bulk export requires a JSON object or array at the root level.");
+        return;
+    }
+    const entries = collectBulkSelectedEntries(rootValue);
+    if (entries.length === 0) {
+        updateBulkControls();
+        alert("Selected items are no longer available.");
+        return;
+    }
+    const format = getFileOperationMode();
+    const isArrayRoot = Array.isArray(rootValue);
+    const payload = format === FILE_MODE_JSONL
+        ? buildBulkExportJsonl(entries, isArrayRoot)
+        : buildBulkExportJson(entries, isArrayRoot);
+    if (!payload) {
+        alert("Nothing to export.");
+        return;
+    }
+    const suggestedName = getBulkExportSuggestedName(format);
+    const fileName = promptFileName(format, { suggestedName, persist: false });
+    if (!fileName) return;
+    if (typeof window !== "undefined" && window.__TAURI__) {
+        await saveWithTauri(payload, fileName, format);
+    }
+    else {
+        const mimeType = format === FILE_MODE_JSONL ? "application/jsonl" : "application/json";
+        triggerDownload(payload, fileName, mimeType);
+    }
 }
 
 function initializeTooltips() {
@@ -3414,6 +3514,7 @@ let bulkOperationsEnabled = false;
 const bulkSelectionState = new Map();
 let bulkToggleInput = null;
 let bulkDeleteButton = null;
+let bulkExportButton = null;
 let bulkDeleteContainer = null;
 let bulkSelectionCountLabel = null;
 let expandCollapseToggleButton = null;
@@ -3645,9 +3746,16 @@ function getJsonlText() {
     return g_jsonlLoader.lines.join("\n");
 }
 
-function promptFileName(format) {
-    const suggestedName = getSuggestedFileName(format);
+function promptFileName(format, options = {}) {
+    const suggestedName = ensureFileExtension(
+        options.suggestedName || getSuggestedFileName(format),
+        format
+    );
+    const shouldPersist = options.persist !== false;
     if (typeof window === "undefined" || typeof window.prompt !== "function") {
+        if (shouldPersist) {
+            lastLoadedFileName = suggestedName;
+        }
         return suggestedName;
     }
     let userInput = window.prompt("Enter file name", suggestedName);
@@ -3657,7 +3765,9 @@ function promptFileName(format) {
         trimmed = suggestedName;
     }
     trimmed = ensureFileExtension(trimmed, format);
-    lastLoadedFileName = trimmed;
+    if (shouldPersist) {
+        lastLoadedFileName = trimmed;
+    }
     return trimmed;
 }
 
@@ -3682,6 +3792,12 @@ function ensureFileExtension(fileName, format) {
         return `${base}${extension}`;
     }
     return cleaned;
+}
+
+function getBulkExportSuggestedName(format) {
+    const baseWithExtension = getSuggestedFileName(format);
+    const base = baseWithExtension.replace(/\.[^./\\]+$/, "") || "data";
+    return ensureFileExtension(`${base}-selection`, format);
 }
 
 async function handleSaveRequest(format) {
@@ -4190,6 +4306,7 @@ if (editingToggle) {
 
 bulkToggleInput = document.querySelector("#toggle-bulk-operations");
 bulkDeleteButton = document.querySelector("#bulk-delete-selected");
+bulkExportButton = document.querySelector("#bulk-export-selected");
 bulkDeleteContainer = document.querySelector("#bulk-operations-actions");
 bulkSelectionCountLabel = document.querySelector("#bulk-selection-count");
 if (bulkToggleInput) {
@@ -4201,6 +4318,11 @@ if (bulkToggleInput) {
 if (bulkDeleteButton) {
     bulkDeleteButton.addEventListener("click", () => {
         handleBulkDeleteSelected();
+    });
+}
+if (bulkExportButton) {
+    bulkExportButton.addEventListener("click", () => {
+        handleBulkExportSelected();
     });
 }
 updateBulkControls();
