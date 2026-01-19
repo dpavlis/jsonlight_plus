@@ -33,6 +33,10 @@ const PROPERTY_EDITOR_TAB_INSERTION = "\t";
 // Number of leading spaces added/removed for multi-line indent; supply any string (e.g., two spaces).
 const PROPERTY_EDITOR_INDENT_STEP = "  ";
 
+// Debounce durations for the paste/edit textarea auto-refresh behavior.
+const PASTE_AREA_EDIT_DEBOUNCE_MS = 600;
+const PASTE_AREA_PASTE_DELAY_MS = 30;
+
 
 
 const PROPERTY_EDITOR_MIN_WIDTH = 460;
@@ -3519,6 +3523,8 @@ let bulkDeleteContainer = null;
 let bulkSelectionCountLabel = null;
 let expandCollapseToggleButton = null;
 let expandCollapseToggleState = "collapsed";
+let pasteAreaRenderTimeoutId = null;
+let pasteAreaSkipNextInputDebounce = false;
 
 updateTopLevelNavigator();
 
@@ -3975,6 +3981,25 @@ function displayParseError(errorInfo) {
     requestSearchRefresh();
 }
 
+function renderFromPasteAreaValue() {
+    if (!pasteArea) return;
+    hideJsonlControls();
+    clearFileNameDisplay();
+    renderJsonStr(pasteArea.value);
+}
+
+function schedulePasteAreaRender(delayMs) {
+    if (!pasteArea) return;
+    if (pasteAreaRenderTimeoutId) {
+        clearTimeout(pasteAreaRenderTimeoutId);
+    }
+    const delay = typeof delayMs === "number" ? Math.max(0, delayMs) : PASTE_AREA_EDIT_DEBOUNCE_MS;
+    pasteAreaRenderTimeoutId = setTimeout(() => {
+        pasteAreaRenderTimeoutId = null;
+        renderFromPasteAreaValue();
+    }, delay);
+}
+
 function renderJsonStr(jsonStr) {
     document.querySelector("#view").replaceChildren();
 
@@ -4094,13 +4119,24 @@ function navigateToLine(lineNumber) {
 }
 
 let pasteArea = document.querySelector("#paste");
-pasteArea.addEventListener("change", (ev) => {
-    hideJsonlControls(); // Hide JSONL controls when using paste
-    clearFileNameDisplay(); // Clear file name when using paste
-    renderJsonStr(pasteArea.value);
-});
-if (pasteArea.value != "") {
-    renderJsonStr(pasteArea.value);
+if (pasteArea) {
+    pasteArea.addEventListener("paste", () => {
+        pasteAreaSkipNextInputDebounce = true;
+        schedulePasteAreaRender(PASTE_AREA_PASTE_DELAY_MS);
+    });
+    pasteArea.addEventListener("input", () => {
+        if (pasteAreaSkipNextInputDebounce) {
+            pasteAreaSkipNextInputDebounce = false;
+            return;
+        }
+        schedulePasteAreaRender(PASTE_AREA_EDIT_DEBOUNCE_MS);
+    });
+    pasteArea.addEventListener("change", () => {
+        schedulePasteAreaRender(0);
+    });
+    if (pasteArea.value && pasteArea.value.trim() !== "") {
+        schedulePasteAreaRender(0);
+    }
 }
 
 const pasteToggleButton = document.querySelector("#paste-toggle-button");
