@@ -58,16 +58,11 @@ main {
     overflow-y: auto;
 }
 
-.property-editor-key-row {
+.property-editor-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    min-height: 1.4rem;
+    gap: 0.65rem;
     flex-wrap: wrap;
-}
-
-.property-editor-key-label {
-    flex-shrink: 0;
 }
 
 .property-editor-key-display {
@@ -82,8 +77,8 @@ main {
 }
 
 .property-editor-key-edit {
-    flex: 1 1 240px;
-    max-width: 520px;
+    flex: 1 1 220px;
+    max-width: 460px;
 }
 
 .property-editor-key-error {

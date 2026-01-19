@@ -55,8 +55,6 @@ const propertyEditorState = {
     modalElement: document.querySelector("#property-editor-modal"),
     dialog: document.querySelector("#property-editor-modal .property-editor-dialog"),
     textarea: document.querySelector("#property-editor-input"),
-    keyRow: document.querySelector("#property-editor-key-row"),
-    keyLabel: document.querySelector("#property-editor-key-label"),
     keyDisplay: document.querySelector("#property-editor-key-display"),
     keyEditor: document.querySelector("#property-editor-key-edit"),
     keyInput: document.querySelector("#property-editor-key-input"),
@@ -806,7 +804,6 @@ if (propertyEditorState.modalElement) {
         if (propertyEditorState.replaceInput) propertyEditorState.replaceInput.value = "";
         if (propertyEditorState.keyInput) propertyEditorState.keyInput.value = "";
         if (propertyEditorState.keyDisplay) propertyEditorState.keyDisplay.textContent = "";
-        if (propertyEditorState.keyLabel) propertyEditorState.keyLabel.textContent = "Property";
         if (propertyEditorState.keyEditor) propertyEditorState.keyEditor.classList.add("d-none");
         if (propertyEditorState.keyDisplay) propertyEditorState.keyDisplay.classList.remove("d-none");
         setPropertyEditorKeyError("");
@@ -2766,12 +2763,6 @@ function formatPropertyEditorKeyLabel(key) {
     return String(key);
 }
 
-function getPropertyEditorKeyLabelText(key) {
-    if (key == null) return "Item";
-    if (typeof key === "number") return "Index";
-    return "Property";
-}
-
 function isPropertyEditorKeyEditable(loader) {
     if (!loader || !loader.parentLoader) return false;
     const parentValue = loader.parentLoader.getValue();
@@ -2792,14 +2783,10 @@ function setPropertyEditorKeyError(message) {
 }
 
 function updatePropertyEditorKeyUI(kvRoot) {
-    if (!propertyEditorState.keyRow || !propertyEditorState.keyDisplay) return;
+    if (!propertyEditorState.keyDisplay) return;
     const loader = kvRoot ? kvRoot.loader : null;
     const key = loader ? loader.parentKey : null;
     const editable = g_editingEnabled && isPropertyEditorKeyEditable(loader);
-    const labelText = getPropertyEditorKeyLabelText(key);
-    if (propertyEditorState.keyLabel) {
-        propertyEditorState.keyLabel.textContent = labelText;
-    }
     propertyEditorState.keyDisplay.textContent = formatPropertyEditorKeyLabel(key);
     propertyEditorState.keyDisplay.classList.toggle("property-editor-key-clickable", editable);
     propertyEditorState.keyDisplay.disabled = !editable;

@@ -323,12 +323,8 @@
       <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable property-editor-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="property-editor-title">Property Editor</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" title="Close"></button>
-          </div>
-          <div class="modal-body property-editor-body">
-            <div class="property-editor-key-row" id="property-editor-key-row">
-              <span class="text-muted small property-editor-key-label" id="property-editor-key-label">Property</span>
+            <div class="property-editor-header">
+              <h5 class="modal-title" id="property-editor-title">Property Editor</h5>
               <button type="button" class="btn btn-link btn-sm p-0 property-editor-key-display" id="property-editor-key-display" title="Edit property name"></button>
               <div class="input-group input-group-sm property-editor-key-edit d-none" id="property-editor-key-edit">
                 <input type="text" class="form-control font-monospace" id="property-editor-key-input" autocomplete="off">
@@ -336,6 +332,9 @@
                 <button class="btn btn-outline-secondary" type="button" id="property-editor-key-cancel" title="Cancel rename">Cancel</button>
               </div>
             </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" title="Close"></button>
+          </div>
+          <div class="modal-body property-editor-body">
             <div class="text-danger small property-editor-key-error d-none" id="property-editor-key-error" role="alert" aria-live="polite"></div>
             <div class="mb-2 text-muted small" id="property-editor-path">root</div>
             <textarea class="form-control font-monospace property-editor-input" id="property-editor-input" rows="18"></textarea>
