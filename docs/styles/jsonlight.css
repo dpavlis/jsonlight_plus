@@ -102,6 +102,10 @@ body.theme-dark .append-data-count {
     font-weight: 600;
 }
 
+#append-data-text {
+    font-size: 0.8rem;
+}
+
 body.theme-dark .append-data-status.append-data-status-warning {
     color: #fecaca;
 }
