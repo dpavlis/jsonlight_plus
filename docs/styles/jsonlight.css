@@ -76,6 +76,36 @@ main {
     text-decoration: underline;
 }
 
+.append-data-count {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+body.theme-dark .append-data-count {
+    color: #e2e8f0;
+}
+
+.append-data-error {
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.append-data-status {
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.1rem;
+}
+
+.append-data-status.append-data-status-warning {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+body.theme-dark .append-data-status.append-data-status-warning {
+    color: #fecaca;
+}
+
 .property-editor-key-edit {
     flex: 1 1 220px;
     max-width: 460px;

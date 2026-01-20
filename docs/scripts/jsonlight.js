@@ -36,6 +36,7 @@ const PROPERTY_EDITOR_INDENT_STEP = "  ";
 // Debounce durations for the paste/edit textarea auto-refresh behavior.
 const PASTE_AREA_EDIT_DEBOUNCE_MS = 600;
 const PASTE_AREA_PASTE_DELAY_MS = 30;
+const APPEND_DATA_PARSE_DEBOUNCE_MS = 400;
 
 
 
@@ -76,6 +77,23 @@ const propertyEditorState = {
     modal: null,
     currentKvRoot: null,
     caretUpdateHandle: null,
+};
+
+const appendDataState = {
+    modalElement: document.querySelector("#append-data-modal"),
+    openButton: document.querySelector("#append-data-button"),
+    fileInput: document.querySelector("#append-data-file"),
+    textArea: document.querySelector("#append-data-text"),
+    formatLabel: document.querySelector("#append-data-format"),
+    countLabel: document.querySelector("#append-data-count"),
+    errorLabel: document.querySelector("#append-data-error"),
+    statusLabel: document.querySelector("#append-data-status"),
+    applyButton: document.querySelector("#append-data-apply"),
+    modal: null,
+    parseHandle: null,
+    parsedItems: null,
+    parsedMode: null,
+    parsedValue: null
 };
 
 const propertyRenameState = {
@@ -817,6 +835,23 @@ if (propertyEditorState.modalElement) {
         if (propertyEditorState.keyDisplay) propertyEditorState.keyDisplay.classList.remove("d-none");
         setPropertyEditorKeyError("");
         setPropertyEditorSearchStatus("", "info");
+    });
+}
+
+if (appendDataState.modalElement) {
+    appendDataState.modal = new bootstrap.Modal(appendDataState.modalElement);
+    appendDataState.modalElement.addEventListener("shown.bs.modal", () => {
+        if (appendDataState.textArea) {
+            appendDataState.textArea.focus();
+        }
+        const targetMode = getAppendTargetMode();
+        if (!targetMode) {
+            setAppendDataError("");
+            setAppendDataStatus("Append works with JSON arrays or JSONL data.", true);
+        }
+    });
+    appendDataState.modalElement.addEventListener("hidden.bs.modal", () => {
+        resetAppendDataDialog();
     });
 }
 
@@ -2830,6 +2865,352 @@ function isPropertyEditorKeyEditable(loader) {
     return typeof loader.parentKey === "string";
 }
 
+function getAppendTargetMode() {
+    if (g_jsonlLoader && g_currentMode === "jsonl-line") {
+        return "jsonl";
+    }
+    if (g_currentRootLoader) {
+        const rootValue = g_currentRootLoader.getValue();
+        if (Array.isArray(rootValue)) {
+            return "json-array";
+        }
+    }
+    return null;
+}
+
+function setAppendDataError(message) {
+    if (!appendDataState.errorLabel) return;
+    if (message) {
+        appendDataState.errorLabel.textContent = message;
+        appendDataState.errorLabel.classList.remove("d-none");
+    }
+    else {
+        appendDataState.errorLabel.textContent = "";
+        appendDataState.errorLabel.classList.add("d-none");
+    }
+}
+
+function updateAppendDataSummary(count, mode) {
+    if (appendDataState.formatLabel) {
+        appendDataState.formatLabel.textContent = mode ? `Format: ${mode.toUpperCase()}` : "Format: —";
+    }
+    if (appendDataState.countLabel) {
+        appendDataState.countLabel.textContent = `Will add: ${count || 0}`;
+    }
+}
+
+function setAppendDataStatus(message, isWarning = false) {
+    if (!appendDataState.statusLabel) return;
+    appendDataState.statusLabel.textContent = message || "";
+    appendDataState.statusLabel.classList.toggle("append-data-status-warning", !!isWarning);
+}
+
+function setAppendDataApplyState(disabled, reason = "") {
+    if (!appendDataState.applyButton) return;
+    appendDataState.applyButton.disabled = !!disabled;
+    appendDataState.applyButton.title = disabled && reason ? reason : "Append";
+}
+
+function parseJsonTextWithContext(text) {
+    try {
+        const value = JSON.parse(text);
+        return { success: true, value };
+    }
+    catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            context: buildJsonParseErrorContext(text, error.message)
+        };
+    }
+}
+
+function focusAppendDataError(context) {
+    if (!context || !appendDataState.textArea) return;
+    const offset = getOffsetForLineAndColumn(appendDataState.textArea.value || "", context.line, context.column);
+    appendDataState.textArea.focus();
+    appendDataState.textArea.setSelectionRange(offset, offset);
+    const lineHeight = parseFloat(getComputedStyle(appendDataState.textArea).lineHeight || "16");
+    const targetTop = Math.max(0, (context.line - 1) * lineHeight - appendDataState.textArea.clientHeight / 2);
+    appendDataState.textArea.scrollTop = targetTop;
+}
+
+function parseJsonlText(text) {
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+    const items = [];
+    for (let i = 0; i < lines.length; i += 1) {
+        try {
+            items.push(JSON.parse(lines[i]));
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: `Line ${i + 1}: ${error.message}`,
+                context: { line: i + 1, column: 1 }
+            };
+        }
+    }
+    return { success: true, items };
+}
+
+function parseAppendDataText(text, hintMode = null) {
+    const trimmed = (text || "").trim();
+    if (!trimmed) {
+        return { success: false, error: "Paste JSON/JSONL or choose a file first." };
+    }
+    if (hintMode === "jsonl") {
+        const jsonlResult = parseJsonlText(trimmed);
+        if (jsonlResult.success) {
+            return { success: true, mode: "jsonl", items: jsonlResult.items, value: null };
+        }
+    }
+    const jsonResult = parseJsonTextWithContext(trimmed);
+    if (jsonResult.success) {
+        const value = jsonResult.value;
+        const items = Array.isArray(value) ? value : [value];
+        return { success: true, mode: "json", items, value };
+    }
+    const jsonlFallback = parseJsonlText(trimmed);
+    if (jsonlFallback.success) {
+        return { success: true, mode: "jsonl", items: jsonlFallback.items, value: null };
+    }
+    return { success: false, error: jsonResult.error, context: jsonResult.context };
+}
+
+function scheduleAppendDataParse(hintMode = null) {
+    if (!appendDataState.textArea) return;
+    if (appendDataState.parseHandle) {
+        clearTimeout(appendDataState.parseHandle);
+        appendDataState.parseHandle = null;
+    }
+    appendDataState.parseHandle = setTimeout(() => {
+        appendDataState.parseHandle = null;
+        const result = parseAppendDataText(appendDataState.textArea.value, hintMode);
+        if (!result.success) {
+            appendDataState.parsedItems = null;
+            appendDataState.parsedMode = null;
+            appendDataState.parsedValue = null;
+            updateAppendDataSummary(0, null);
+            const location = result.context && result.context.line && result.context.column
+                ? ` (Ln ${result.context.line}, Col ${result.context.column})`
+                : "";
+            setAppendDataError(result.error ? `Parse error: ${result.error}${location}` : "Unable to parse input.");
+            if (result.context) {
+                focusAppendDataError(result.context);
+            }
+            if (appendDataState.applyButton) appendDataState.applyButton.disabled = true;
+            return;
+        }
+        appendDataState.parsedItems = result.items;
+        appendDataState.parsedMode = result.mode;
+        appendDataState.parsedValue = result.value;
+        updateAppendDataSummary(result.items.length, result.mode);
+        setAppendDataError("");
+        const targetMode = getAppendTargetMode();
+        let disableApply = !targetMode || result.items.length === 0;
+        let statusMessage = "";
+        let statusWarning = false;
+        if (!targetMode) {
+            statusMessage = "Append works with JSON arrays or JSONL data.";
+            statusWarning = true;
+        }
+        if (targetMode && result.items.length > 0) {
+            if (targetMode === "jsonl" && g_jsonlLoader && g_jsonlLoader.lines.length > 0) {
+                try {
+                    const existingSample = JSON.parse(g_jsonlLoader.lines[0]);
+                    const incomingSample = result.items[0];
+                    const message = getTopLevelCompatibilityMessage(existingSample, incomingSample);
+                    if (message) {
+                        statusMessage = message;
+                        statusWarning = true;
+                        disableApply = true;
+                    }
+                }
+                catch (error) {
+                    statusMessage = "Unable to validate JSONL structure.";
+                    statusWarning = true;
+                    disableApply = true;
+                }
+            }
+            if (targetMode === "json-array" && g_currentRootLoader) {
+                try {
+                    const rootValue = g_currentRootLoader.getValue();
+                    if (!Array.isArray(rootValue)) {
+                        statusMessage = "Current data is not an array.";
+                        statusWarning = true;
+                        disableApply = true;
+                    }
+                    else if (rootValue.length > 0) {
+                        const existingSample = rootValue[0];
+                        const incomingSample = result.items[0];
+                        const message = getTopLevelCompatibilityMessage(existingSample, incomingSample);
+                        if (message) {
+                            statusMessage = message;
+                            statusWarning = true;
+                            disableApply = true;
+                        }
+                    }
+                }
+                catch (error) {
+                    statusMessage = "Unable to validate array structure.";
+                    statusWarning = true;
+                    disableApply = true;
+                }
+            }
+        }
+        if (!statusMessage && disableApply && result.items.length === 0) {
+            statusMessage = "No items to append.";
+            statusWarning = true;
+        }
+        setAppendDataStatus(statusMessage, statusWarning);
+        if (disableApply) {
+            const tooltip = statusMessage || "Append is unavailable.";
+            setAppendDataApplyState(true, tooltip);
+        }
+        else {
+            setAppendDataApplyState(false, "Append");
+        }
+    }, APPEND_DATA_PARSE_DEBOUNCE_MS);
+}
+
+function resetAppendDataDialog() {
+    appendDataState.parsedItems = null;
+    appendDataState.parsedMode = null;
+    appendDataState.parsedValue = null;
+    if (appendDataState.fileInput) appendDataState.fileInput.value = "";
+    if (appendDataState.textArea) appendDataState.textArea.value = "";
+    updateAppendDataSummary(0, null);
+    setAppendDataError("");
+    setAppendDataStatus("");
+    setAppendDataApplyState(true, "Paste or choose data to append.");
+}
+
+function formatKeyList(keys, limit = 6) {
+    if (!Array.isArray(keys)) return "";
+    const shown = keys.slice(0, limit);
+    const suffix = keys.length > limit ? ` +${keys.length - limit} more` : "";
+    return `${shown.join(", ")}${suffix}`;
+}
+
+function describeTopLevelShape(value) {
+    const category = getTopLevelCategory(value);
+    if (category === "object") {
+        const keys = Object.keys(value || {});
+        return `object keys: ${formatKeyList(keys) || "(none)"}`;
+    }
+    return `type: ${category}`;
+}
+
+function getTopLevelCompatibilityMessage(existingItem, newItem) {
+    if (isCompatibleTopLevel(existingItem, newItem)) return null;
+    return `Incompatible top-level structure (existing ${describeTopLevelShape(existingItem)}; new ${describeTopLevelShape(newItem)}).`;
+}
+
+function getTopLevelCategory(value) {
+    if (value === null || value === undefined) return "null";
+    if (Array.isArray(value)) return "array";
+    const type = typeof value;
+    if (type === "object") return "object";
+    if (type === "string") return "string";
+    if (type === "number") return "number";
+    if (type === "boolean") return "boolean";
+    return "other";
+}
+
+function getObjectShapeKey(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    return Object.keys(value).sort().join("|");
+}
+
+function isCompatibleTopLevel(existingItem, newItem) {
+    const existingCategory = getTopLevelCategory(existingItem);
+    const newCategory = getTopLevelCategory(newItem);
+    if (existingCategory !== newCategory) return false;
+    if (existingCategory === "object") {
+        return getObjectShapeKey(existingItem) === getObjectShapeKey(newItem);
+    }
+    return true;
+}
+
+async function applyAppendData() {
+    const targetMode = getAppendTargetMode();
+    if (!targetMode) {
+        setAppendDataError("");
+        setAppendDataStatus("Append works with JSON arrays or JSONL data.", true);
+        setAppendDataApplyState(true, "Append works with JSON arrays or JSONL data.");
+        return;
+    }
+    if (!appendDataState.parsedItems || appendDataState.parsedItems.length === 0) {
+        setAppendDataError("No parsed items to append.");
+        setAppendDataStatus("");
+        setAppendDataApplyState(true, "No parsed items to append.");
+        return;
+    }
+    if (targetMode === "jsonl" && g_jsonlLoader) {
+        if (g_jsonlLoader.lines.length > 0) {
+            try {
+                const existingSample = JSON.parse(g_jsonlLoader.lines[0]);
+                const incomingSample = appendDataState.parsedItems[0];
+                if (!isCompatibleTopLevel(existingSample, incomingSample)) {
+                    setAppendDataError("");
+                    setAppendDataStatus("Incompatible top-level structure for JSONL append.", true);
+                    setAppendDataApplyState(true, "Incompatible top-level structure for JSONL append.");
+                    return;
+                }
+            }
+            catch (error) {
+                setAppendDataError("");
+                setAppendDataStatus("Unable to validate JSONL structure before append.", true);
+                setAppendDataApplyState(true, "Unable to validate JSONL structure before append.");
+                return;
+            }
+        }
+        const linesToAdd = appendDataState.parsedItems.map(item => {
+            try {
+                return JSON.stringify(item);
+            }
+            catch (error) {
+                return null;
+            }
+        }).filter(line => line != null);
+        if (!linesToAdd.length) {
+            setAppendDataError("Unable to serialize items for JSONL append.");
+            return;
+        }
+        g_jsonlLoader.lines.push(...linesToAdd);
+        updateJsonlControls();
+        updateTopLevelNavigator();
+        updateDownloadButtons();
+        if (appendDataState.modal) appendDataState.modal.hide();
+        return;
+    }
+    if (targetMode === "json-array" && g_currentRootLoader) {
+        const rootValue = g_currentRootLoader.getValue();
+        if (!Array.isArray(rootValue)) {
+            setAppendDataError("");
+            setAppendDataStatus("Current data is not an array.", true);
+            setAppendDataApplyState(true, "Current data is not an array.");
+            return;
+        }
+        if (rootValue.length > 0) {
+            const existingSample = rootValue[0];
+            const incomingSample = appendDataState.parsedItems[0];
+            if (!isCompatibleTopLevel(existingSample, incomingSample)) {
+                setAppendDataError("");
+                setAppendDataStatus("Incompatible top-level structure for array append.", true);
+                setAppendDataApplyState(true, "Incompatible top-level structure for array append.");
+                return;
+            }
+        }
+        const expandedPaths = captureExpandedPaths();
+        rootValue.push(...appendDataState.parsedItems);
+        handleValueChanged(g_currentRootLoader);
+        rerenderCurrentRoot({ preserveScroll: true });
+        restoreExpandedPaths(expandedPaths);
+        if (appendDataState.modal) appendDataState.modal.hide();
+    }
+}
+
 function setPropertyEditorKeyError(message) {
     if (!propertyEditorState.keyErrorLabel) return;
     if (message) {
@@ -4488,6 +4869,47 @@ if (filePicker) {
         else {
             renderJsonFile(file);
         }
+    });
+}
+
+if (appendDataState.openButton) {
+    appendDataState.openButton.addEventListener("click", () => {
+        resetAppendDataDialog();
+        const targetMode = getAppendTargetMode();
+        if (!targetMode) {
+            setAppendDataError("Append works with JSON arrays or JSONL data.");
+        }
+        if (appendDataState.modal) {
+            appendDataState.modal.show();
+        }
+    });
+}
+
+if (appendDataState.fileInput) {
+    appendDataState.fileInput.addEventListener("change", async () => {
+        const files = appendDataState.fileInput.files;
+        if (!files || !files[0]) return;
+        const file = files[0];
+        const text = await file.text();
+        if (appendDataState.textArea) {
+            appendDataState.textArea.value = text;
+        }
+        const hint = file.name.endsWith(".jsonl") || file.name.endsWith(".ndjson") || file.name.endsWith(".jsonlines")
+            ? "jsonl"
+            : "json";
+        scheduleAppendDataParse(hint);
+    });
+}
+
+if (appendDataState.textArea) {
+    appendDataState.textArea.addEventListener("input", () => {
+        scheduleAppendDataParse();
+    });
+}
+
+if (appendDataState.applyButton) {
+    appendDataState.applyButton.addEventListener("click", () => {
+        applyAppendData();
     });
 }
 
