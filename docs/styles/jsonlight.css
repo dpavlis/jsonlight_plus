@@ -16,7 +16,7 @@ main {
 }
 
 #view {
-    font-size: 0.9rem;
+    font-size: var(--tree-font-size, 0.9rem);
 }
 
 .sidebar {
@@ -122,7 +122,7 @@ body.theme-dark .append-data-status.append-data-status-warning {
 .property-editor-input {
     flex: 1;
     min-height: 240px;
-    font-size: 0.9rem;
+    font-size: var(--editor-font-size, 0.9rem);
     resize: none;
 }
 

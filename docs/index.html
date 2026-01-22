@@ -327,6 +327,36 @@
               >
               <div class="form-text" id="config-indent-size-help">Controls how many spaces are inserted when indenting or auto-formatting lines.</div>
             </div>
+            <div class="mb-3">
+              <label for="config-tree-font-size" class="form-label">Tree view font size (rem)</label>
+              <input
+                type="number"
+                class="form-control"
+                id="config-tree-font-size"
+                min="0.7"
+                max="1.4"
+                step="0.05"
+                inputmode="decimal"
+                aria-describedby="config-tree-font-size-help"
+                required
+              >
+              <div class="form-text" id="config-tree-font-size-help">Controls the font size in the main tree view.</div>
+            </div>
+            <div class="mb-3">
+              <label for="config-editor-font-size" class="form-label">Property editor font size (rem)</label>
+              <input
+                type="number"
+                class="form-control"
+                id="config-editor-font-size"
+                min="0.7"
+                max="1.4"
+                step="0.05"
+                inputmode="decimal"
+                aria-describedby="config-editor-font-size-help"
+                required
+              >
+              <div class="form-text" id="config-editor-font-size-help">Controls the font size in the property editor textarea.</div>
+            </div>
             <div class="text-danger small" id="app-settings-error" role="alert" aria-live="assertive"></div>
           </div>
           <div class="modal-footer">

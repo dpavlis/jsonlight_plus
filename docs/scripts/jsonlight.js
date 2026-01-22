@@ -149,10 +149,14 @@ const APP_CONFIG_MIN_PAGE_SIZE = 50;
 const APP_CONFIG_MAX_PAGE_SIZE = 2000;
 const APP_CONFIG_MIN_INDENT_SIZE = 1;
 const APP_CONFIG_MAX_INDENT_SIZE = 8;
+const APP_CONFIG_MIN_FONT_SIZE = 0.7;
+const APP_CONFIG_MAX_FONT_SIZE = 1.4;
 const APP_CONFIG_DEFAULTS = {
     pageSize: 500,
     tabInsertion: PROPERTY_EDITOR_TAB_INSERTION,
-    indentSize: PROPERTY_EDITOR_INDENT_STEP.length || 2
+    indentSize: PROPERTY_EDITOR_INDENT_STEP.length || 2,
+    treeFontSize: 0.9,
+    editorFontSize: 0.9
 };
 
 const appConfigState = {
@@ -164,13 +168,17 @@ const appConfigState = {
     pageSizeInput: document.querySelector("#config-page-size"),
     tabInsertionInput: document.querySelector("#config-tab-insertion"),
     indentSizeInput: document.querySelector("#config-indent-size"),
+    treeFontSizeInput: document.querySelector("#config-tree-font-size"),
+    editorFontSizeInput: document.querySelector("#config-editor-font-size"),
     errorLabel: document.querySelector("#app-settings-error")
 };
 
 const runtimeFormattingState = {
     tabInsertion: PROPERTY_EDITOR_TAB_INSERTION,
     indentSize: APP_CONFIG_DEFAULTS.indentSize,
-    indentToken: PROPERTY_EDITOR_INDENT_STEP
+    indentToken: PROPERTY_EDITOR_INDENT_STEP,
+    treeFontSize: APP_CONFIG_DEFAULTS.treeFontSize,
+    editorFontSize: APP_CONFIG_DEFAULTS.editorFontSize
 };
 
 updateRuntimeFormattingSettings();
@@ -1044,6 +1052,12 @@ function populateAppConfigForm() {
     if (appConfigState.indentSizeInput) {
         appConfigState.indentSizeInput.value = `${runtimeFormattingState.indentSize}`;
     }
+    if (appConfigState.treeFontSizeInput) {
+        appConfigState.treeFontSizeInput.value = `${runtimeFormattingState.treeFontSize}`;
+    }
+    if (appConfigState.editorFontSizeInput) {
+        appConfigState.editorFontSizeInput.value = `${runtimeFormattingState.editorFontSize}`;
+    }
     setAppConfigError("");
 }
 
@@ -1071,6 +1085,22 @@ async function handleAppConfigSave() {
         }
         return;
     }
+    const parsedTreeFontSize = Number.parseFloat(appConfigState.treeFontSizeInput ? appConfigState.treeFontSizeInput.value : "");
+    if (!Number.isFinite(parsedTreeFontSize)) {
+        setAppConfigError(`Enter a tree font size between ${APP_CONFIG_MIN_FONT_SIZE} and ${APP_CONFIG_MAX_FONT_SIZE}.`);
+        if (appConfigState.treeFontSizeInput) {
+            appConfigState.treeFontSizeInput.focus();
+        }
+        return;
+    }
+    const parsedEditorFontSize = Number.parseFloat(appConfigState.editorFontSizeInput ? appConfigState.editorFontSizeInput.value : "");
+    if (!Number.isFinite(parsedEditorFontSize)) {
+        setAppConfigError(`Enter an editor font size between ${APP_CONFIG_MIN_FONT_SIZE} and ${APP_CONFIG_MAX_FONT_SIZE}.`);
+        if (appConfigState.editorFontSizeInput) {
+            appConfigState.editorFontSizeInput.focus();
+        }
+        return;
+    }
     const rawTabValue = appConfigState.tabInsertionInput ? appConfigState.tabInsertionInput.value : "";
     const interpretedTabValue = interpretTabInsertionInput(rawTabValue);
     if (!interpretedTabValue) {
@@ -1083,7 +1113,9 @@ async function handleAppConfigSave() {
     const nextConfig = {
         pageSize: clampPageSize(parsedPageSize),
         indentSize: clampIndentSize(parsedIndentSize),
-        tabInsertion: ensureValidTabInsertion(interpretedTabValue)
+        tabInsertion: ensureValidTabInsertion(interpretedTabValue),
+        treeFontSize: clampFontSize(parsedTreeFontSize),
+        editorFontSize: clampFontSize(parsedEditorFontSize)
     };
     appConfigState.current = nextConfig;
     updateRuntimeFormattingSettings();
@@ -1108,7 +1140,9 @@ function loadAppConfigFromStorage() {
         const nextConfig = {
             pageSize: clampPageSize(parsed.pageSize),
             tabInsertion: ensureValidTabInsertion(parsed.tabInsertion),
-            indentSize: clampIndentSize(parsed.indentSize)
+            indentSize: clampIndentSize(parsed.indentSize),
+            treeFontSize: clampFontSize(parsed.treeFontSize),
+            editorFontSize: clampFontSize(parsed.editorFontSize)
         };
         return nextConfig;
     }
@@ -1133,14 +1167,21 @@ function updateRuntimeFormattingSettings() {
     const sanitizedPageSize = clampPageSize(appConfigState.current?.pageSize);
     const sanitizedIndentSize = clampIndentSize(appConfigState.current?.indentSize);
     const sanitizedTabInsertion = ensureValidTabInsertion(appConfigState.current?.tabInsertion);
+    const sanitizedTreeFontSize = clampFontSize(appConfigState.current?.treeFontSize);
+    const sanitizedEditorFontSize = clampFontSize(appConfigState.current?.editorFontSize);
     appConfigState.current = {
         pageSize: sanitizedPageSize,
         indentSize: sanitizedIndentSize,
-        tabInsertion: sanitizedTabInsertion
+        tabInsertion: sanitizedTabInsertion,
+        treeFontSize: sanitizedTreeFontSize,
+        editorFontSize: sanitizedEditorFontSize
     };
     runtimeFormattingState.tabInsertion = sanitizedTabInsertion;
     runtimeFormattingState.indentSize = sanitizedIndentSize;
     runtimeFormattingState.indentToken = buildIndentToken(sanitizedIndentSize);
+    runtimeFormattingState.treeFontSize = sanitizedTreeFontSize;
+    runtimeFormattingState.editorFontSize = sanitizedEditorFontSize;
+    applyRuntimeFontSizes();
 }
 
 function getConfiguredTabInsertion() {
@@ -1171,6 +1212,14 @@ function clampIndentSize(value) {
     return Math.min(Math.max(parsed, APP_CONFIG_MIN_INDENT_SIZE), APP_CONFIG_MAX_INDENT_SIZE);
 }
 
+function clampFontSize(value) {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return APP_CONFIG_DEFAULTS.treeFontSize;
+    }
+    return Math.min(Math.max(parsed, APP_CONFIG_MIN_FONT_SIZE), APP_CONFIG_MAX_FONT_SIZE);
+}
+
 function ensureValidTabInsertion(value) {
     if (typeof value !== "string" || value.length === 0) {
         return PROPERTY_EDITOR_TAB_INSERTION;
@@ -1181,6 +1230,12 @@ function ensureValidTabInsertion(value) {
 function buildIndentToken(indentSize) {
     const safeSize = Math.max(indentSize || APP_CONFIG_DEFAULTS.indentSize, 1);
     return " ".repeat(safeSize);
+}
+
+function applyRuntimeFontSizes() {
+    if (typeof document === "undefined" || !document.documentElement) return;
+    document.documentElement.style.setProperty("--tree-font-size", `${runtimeFormattingState.treeFontSize}rem`);
+    document.documentElement.style.setProperty("--editor-font-size", `${runtimeFormattingState.editorFontSize}rem`);
 }
 
 function escapeTabInsertionForDisplay(value) {
