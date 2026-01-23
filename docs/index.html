@@ -160,7 +160,18 @@
           </button>
         </div>
         <div class="collapse" id="search-collapse">
-          <div class="input-group input-group-sm mb-2 mt-2">
+          <div class="mb-2">
+            <span class="small text-muted">Search in </span>
+            <button
+              type="button"
+              class="btn btn-link btn-sm p-0 search-property-summary"
+              id="search-property-summary"
+              title="Choose which properties to search"
+            >
+              All
+            </button>
+          </div>
+          <div class="input-group input-group-sm mb-2">
             <input type="text" class="form-control" id="search-input" placeholder="Search JSON" list="search-history-options">
             <datalist id="search-history-options"></datalist>
           </div>
@@ -461,6 +472,28 @@
           <div class="modal-footer">
             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
             <button type="button" class="btn btn-primary" id="property-rename-apply">Rename</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="search-property-modal" tabindex="-1" aria-labelledby="search-property-title" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="search-property-title">Search Property Filter</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" title="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="text-muted small mb-2">Leave empty to search all properties. Add a condition to limit matches to objects where another property has a specific value.</div>
+            <div class="search-property-rules" id="search-property-rules"></div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="search-property-add">Add filter</button>
+            <div class="text-danger small mt-2" id="search-property-error" role="alert" aria-live="polite"></div>
+            <datalist id="search-property-suggestions"></datalist>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="search-property-apply">Apply</button>
           </div>
         </div>
       </div>

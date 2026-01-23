@@ -202,6 +202,69 @@ body.bulk-mode-enabled .bulk-checkbox-wrapper {
     font-size: 0.8rem;
 }
 
+.search-property-options {
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    background: #fff;
+}
+
+.search-property-summary {
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.search-property-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.search-property-rule {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.search-property-rule .form-control {
+    min-width: 0;
+}
+
+.search-property-rule-remove {
+    border: none;
+    background: transparent;
+    color: #dc3545;
+    font-weight: 700;
+    padding: 0 0.25rem;
+}
+
+body.theme-dark .search-property-rule-remove {
+    color: #f87171;
+}
+
+.search-property-options:empty {
+    display: none;
+}
+
+.search-property-option {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.25rem;
+}
+
+.search-property-option:last-child {
+    margin-bottom: 0;
+}
+
+body.theme-dark .search-property-options {
+    background: #0f1115;
+    border-color: #334155;
+}
+
 .btn-icon {
     font-size: 1rem;
     line-height: 1.2;

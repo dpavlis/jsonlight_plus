@@ -1300,6 +1300,11 @@ const searchState = {
     highlightInfo: null,
 };
 
+const searchPropertyFilterState = {
+    available: [],
+    rules: []
+};
+
 let searchInput = document.querySelector("#search-input");
 let searchRegexToggle = document.querySelector("#search-regex");
 let searchPrevButton = document.querySelector("#search-prev");
@@ -1312,6 +1317,14 @@ let replaceAllButton = document.querySelector("#replace-all");
 let replaceButton = document.querySelector("#replace-current");
 let searchCollapseToggle = document.querySelector("#search-collapse-toggle");
 let searchCollapse = document.querySelector("#search-collapse");
+let searchPropertySuggestions = document.querySelector("#search-property-suggestions");
+let searchPropertySummary = document.querySelector("#search-property-summary");
+let searchPropertyModalElement = document.querySelector("#search-property-modal");
+let searchPropertyRulesContainer = document.querySelector("#search-property-rules");
+let searchPropertyAddButton = document.querySelector("#search-property-add");
+let searchPropertyApplyButton = document.querySelector("#search-property-apply");
+let searchPropertyErrorLabel = document.querySelector("#search-property-error");
+let searchPropertyModal = null;
 const topLevelPaginationState = {
     enabled: false,
     pageSize: getConfiguredPageSize(),
@@ -1342,6 +1355,7 @@ let searchHistoryCommitHandle = null;
 
 initializeSearchAndReplaceHistory();
 initializeSearchCollapseToggle();
+initializeSearchPropertyDialog();
 
 if (topLevelGoButton) {
     topLevelGoButton.addEventListener("click", () => {
@@ -1825,6 +1839,201 @@ function initializeSearchCollapseToggle() {
     searchCollapse.addEventListener("hidden.bs.collapse", updateToggle);
 }
 
+function initializeSearchPropertyDialog() {
+    if (searchPropertyModalElement) {
+        searchPropertyModal = new bootstrap.Modal(searchPropertyModalElement);
+    }
+    if (searchPropertySummary) {
+        searchPropertySummary.addEventListener("click", () => {
+            renderSearchPropertyRules();
+            setSearchPropertyError("");
+            if (searchPropertyModal) {
+                searchPropertyModal.show();
+            }
+        });
+    }
+    if (searchPropertyAddButton) {
+        searchPropertyAddButton.addEventListener("click", () => {
+            addSearchPropertyRuleRow();
+        });
+    }
+    if (searchPropertyApplyButton) {
+        searchPropertyApplyButton.addEventListener("click", () => {
+            applySearchPropertyRules();
+        });
+    }
+    if (searchPropertyModalElement) {
+        searchPropertyModalElement.addEventListener("hidden.bs.modal", () => {
+            setSearchPropertyError("");
+        });
+    }
+    updateSearchPropertySummary();
+}
+
+function setSearchPropertyError(message) {
+    if (!searchPropertyErrorLabel) return;
+    searchPropertyErrorLabel.textContent = message || "";
+}
+
+function normalizePropertyName(value) {
+    if (typeof value !== "string") return "";
+    return value.trim();
+}
+
+function updateSearchPropertySuggestions(values) {
+    if (!searchPropertySuggestions) return;
+    searchPropertySuggestions.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+    values.forEach((value) => {
+        if (!value) return;
+        const option = document.createElement("option");
+        option.value = value;
+        fragment.appendChild(option);
+    });
+    searchPropertySuggestions.appendChild(fragment);
+}
+
+function updateSearchPropertyOptions(values) {
+    const unique = Array.from(new Set((values || []).map(normalizePropertyName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    searchPropertyFilterState.available = unique;
+    updateSearchPropertySuggestions(unique);
+    renderSearchPropertyRules();
+}
+
+function updateSearchPropertySummary() {
+    if (!searchPropertySummary) return;
+    if (!searchPropertyFilterState.rules || searchPropertyFilterState.rules.length === 0) {
+        searchPropertySummary.textContent = "All";
+        return;
+    }
+    const summary = searchPropertyFilterState.rules.map((rule) => {
+        if (!rule.conditionKey) return rule.property;
+        return `${rule.property} where ${rule.conditionKey} = ${rule.conditionValue}`;
+    }).join("; ");
+    searchPropertySummary.textContent = summary || "All";
+}
+
+function addSearchPropertyRuleRow(rule = {}) {
+    if (!searchPropertyRulesContainer) return;
+    const row = document.createElement("div");
+    row.classList.add("search-property-rule");
+    const propertyInput = document.createElement("input");
+    propertyInput.type = "text";
+    propertyInput.classList.add("form-control", "form-control-sm");
+    propertyInput.placeholder = "Property";
+    propertyInput.value = rule.property || "";
+    propertyInput.setAttribute("list", "search-property-suggestions");
+    const conditionKeyInput = document.createElement("input");
+    conditionKeyInput.type = "text";
+    conditionKeyInput.classList.add("form-control", "form-control-sm");
+    conditionKeyInput.placeholder = "Condition property";
+    conditionKeyInput.value = rule.conditionKey || "";
+    conditionKeyInput.setAttribute("list", "search-property-suggestions");
+    const conditionValueInput = document.createElement("input");
+    conditionValueInput.type = "text";
+    conditionValueInput.classList.add("form-control", "form-control-sm");
+    conditionValueInput.placeholder = "Condition value";
+    conditionValueInput.value = rule.conditionValue || "";
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.classList.add("search-property-rule-remove");
+    removeButton.textContent = "×";
+    removeButton.title = "Remove filter";
+    removeButton.addEventListener("click", () => {
+        row.remove();
+    });
+    row.appendChild(propertyInput);
+    row.appendChild(conditionKeyInput);
+    row.appendChild(conditionValueInput);
+    row.appendChild(removeButton);
+    searchPropertyRulesContainer.appendChild(row);
+}
+
+function renderSearchPropertyRules() {
+    if (!searchPropertyRulesContainer) return;
+    searchPropertyRulesContainer.replaceChildren();
+    const rules = searchPropertyFilterState.rules || [];
+    if (rules.length === 0) {
+        return;
+    }
+    rules.forEach((rule) => addSearchPropertyRuleRow(rule));
+}
+
+function readSearchPropertyRulesFromUI() {
+    if (!searchPropertyRulesContainer) return [];
+    const rows = Array.from(searchPropertyRulesContainer.querySelectorAll(".search-property-rule"));
+    return rows.map((row) => {
+        const inputs = row.querySelectorAll("input");
+        return {
+            property: normalizePropertyName(inputs[0]?.value || ""),
+            conditionKey: normalizePropertyName(inputs[1]?.value || ""),
+            conditionValue: normalizePropertyName(inputs[2]?.value || "")
+        };
+    }).filter((rule) => rule.property);
+}
+
+function applySearchPropertyRules() {
+    const rules = readSearchPropertyRulesFromUI();
+    const invalidRule = rules.find((rule) => rule.conditionKey && !rule.conditionValue);
+    if (invalidRule) {
+        setSearchPropertyError("Provide a value for each condition property.");
+        return;
+    }
+    searchPropertyFilterState.rules = rules;
+    updateSearchPropertySummary();
+    setSearchPropertyError("");
+    requestSearchRefresh();
+    if (searchPropertyModal) {
+        searchPropertyModal.hide();
+    }
+}
+
+function collectPropertyNamesFromValue(value, set) {
+    if (!set) return;
+    if (Array.isArray(value)) {
+        value.forEach((item) => collectPropertyNamesFromValue(item, set));
+        return;
+    }
+    if (value && typeof value === "object") {
+        Object.entries(value).forEach(([key, child]) => {
+            if (typeof key === "string") {
+                set.add(key);
+            }
+            collectPropertyNamesFromValue(child, set);
+        });
+    }
+}
+
+function collectPropertyNamesFromJsonlLines(lines) {
+    const names = new Set();
+    if (!Array.isArray(lines)) return names;
+    lines.forEach((line) => {
+        const trimmed = (line || "").trim();
+        if (!trimmed) return;
+        try {
+            const parsed = JSON.parse(trimmed);
+            collectPropertyNamesFromValue(parsed, names);
+        }
+        catch (error) {
+            // Ignore parse errors for property discovery.
+        }
+    });
+    return names;
+}
+
+function refreshSearchPropertyOptionsFromCurrentData() {
+    if (g_jsonlLoader && Array.isArray(g_jsonlLoader.lines)) {
+        const names = collectPropertyNamesFromJsonlLines(g_jsonlLoader.lines);
+        updateSearchPropertyOptions(Array.from(names));
+        return;
+    }
+    if (g_currentRootLoader) {
+        const names = new Set();
+        collectPropertyNamesFromValue(g_currentRootLoader.getValue(), names);
+        updateSearchPropertyOptions(Array.from(names));
+    }
+}
+
 function getLocalStorageSafe() {
     if (typeof window === "undefined") return null;
     try {
@@ -1992,8 +2201,10 @@ function performSearch() {
         return;
     }
 
+    const propertyFilter = searchPropertyFilterState.rules;
+
     const rootValue = g_currentRootLoader.getValue();
-    collectSearchMatches(rootValue, [], pattern);
+    collectSearchMatches(rootValue, [], pattern, propertyFilter);
 
     if (searchState.matches.length === 0) {
         searchState.lastFocusedPath = null;
@@ -2015,7 +2226,7 @@ function buildSearchPattern(query, isRegex) {
         try {
             // Compile once to validate the pattern; separate helper builds the actual regex per use.
             // eslint-disable-next-line no-new
-            new RegExp(query, "i");
+            new RegExp(query);
         }
         catch (error) {
             searchState.error = error.message;
@@ -2027,7 +2238,7 @@ function buildSearchPattern(query, isRegex) {
             collectMatches(text) {
                 const target = (text ?? "").toString();
                 if (!target) return [];
-                const regex = new RegExp(query, "gi");
+                const regex = new RegExp(query, "g");
                 const matches = [];
                 let occurrenceIndex = 0;
                 let match;
@@ -2048,7 +2259,7 @@ function buildSearchPattern(query, isRegex) {
                 return matches;
             },
             buildRegex(globalFlag) {
-                return new RegExp(query, globalFlag ? "gi" : "i");
+                return new RegExp(query, globalFlag ? "g" : "");
             }
         };
     }
@@ -2085,36 +2296,57 @@ function buildSearchPattern(query, isRegex) {
     };
 }
 
-function collectSearchMatches(value, path, pattern) {
+function collectSearchMatches(value, path, pattern, propertyFilter) {
     if (Array.isArray(value)) {
         value.forEach((item, index) => {
-            evaluateSearchNode(path, index, item, pattern);
+            evaluateSearchNode(path, index, item, pattern, propertyFilter, null);
         });
         return;
     }
     if (value && typeof value === "object") {
         Object.entries(value).forEach(([key, childValue]) => {
-            evaluateSearchNode(path, key, childValue, pattern);
+            evaluateSearchNode(path, key, childValue, pattern, propertyFilter, value);
         });
         return;
     }
 
     const primitiveText = formatValueForSearch(value);
-    pushValueMatches(path, primitiveText, pattern);
+    if (!propertyFilter || propertyFilter.length === 0) {
+        pushValueMatches(path, primitiveText, pattern);
+    }
 }
 
-function evaluateSearchNode(path, key, value, pattern) {
+function evaluateSearchNode(path, key, value, pattern, propertyFilter, parentObject) {
     const nextPath = [...path, key];
-    const keyText = keyToSearchString(key);
-    const rawKeyText = typeof key === "string" ? key : (typeof key === "number" ? key.toString() : "");
-    pushKeyMatches(nextPath, keyText, rawKeyText, pattern);
-    if (isPrimitiveValue(value)) {
+    const hasFilter = propertyFilter && propertyFilter.length > 0;
+    const isPropertyMatch = hasFilter
+        ? isSearchPropertyMatch(key, parentObject, propertyFilter)
+        : true;
+    if (!hasFilter) {
+        const keyText = keyToSearchString(key);
+        const rawKeyText = typeof key === "string" ? key : (typeof key === "number" ? key.toString() : "");
+        pushKeyMatches(nextPath, keyText, rawKeyText, pattern);
+    }
+    if (isPropertyMatch && isPrimitiveValue(value)) {
         const valueText = formatValueForSearch(value);
         pushValueMatches(nextPath, valueText, pattern);
     }
     if (value && typeof value === "object") {
-        collectSearchMatches(value, nextPath, pattern);
+        collectSearchMatches(value, nextPath, pattern, propertyFilter);
     }
+}
+
+function isSearchPropertyMatch(key, parentObject, rules) {
+    if (!rules || rules.length === 0) return true;
+    if (typeof key !== "string") return false;
+    return rules.some((rule) => {
+        if (!rule || rule.property !== key) return false;
+        if (!rule.conditionKey) return true;
+        if (!parentObject || typeof parentObject !== "object") return false;
+        const candidate = parentObject[rule.conditionKey];
+        if (candidate === undefined) return false;
+        return String(candidate) === String(rule.conditionValue ?? "");
+    });
 }
 
 function pushKeyMatches(path, keyText, rawKeyText, pattern) {
@@ -2372,7 +2604,9 @@ function getSearchRegex(global, options = {}) {
     if (!searchState.isRegex) {
         pattern = escapeRegExp(searchState.query);
     }
-    const flags = global ? "gi" : "i";
+    const flags = searchState.isRegex
+        ? (global ? "g" : "")
+        : (global ? "gi" : "i");
     try {
         return new RegExp(pattern, flags);
     }
@@ -4776,6 +5010,7 @@ function renderJsonStr(jsonStr) {
         return;
     }
     setCurrentRootLoader(loader, "json");
+    refreshSearchPropertyOptionsFromCurrentData();
     renderJSON(loader);
 }
 
@@ -4791,6 +5026,7 @@ async function renderJsonFile(file) {
         return;
     }
     setCurrentRootLoader(loader, "json");
+    refreshSearchPropertyOptionsFromCurrentData();
     renderJSON(loader);
 }
 
@@ -4807,6 +5043,7 @@ async function renderJsonlFile(file) {
     }
     g_jsonlLoader = loader;
     updateTopLevelNavigator();
+    refreshSearchPropertyOptionsFromCurrentData();
     
     // Show JSONL controls
     showJsonlControls();
