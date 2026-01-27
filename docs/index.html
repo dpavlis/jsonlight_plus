@@ -30,6 +30,7 @@
   <link rel="canonical" href="https://bluerose73.github.io/jsonlight/">
   
   <link href="styles/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles/highlight.css">
   <link rel="stylesheet" href="styles/jsonlight.css">
   <link rel="apple-touch-icon" sizes="180x180" href="icon/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon/favicon-32x32.png">
@@ -353,6 +354,17 @@
               >
               <div class="form-text" id="config-editor-font-size-help">Controls the font size in the property editor textarea.</div>
             </div>
+            <div class="mb-3">
+              <label for="config-syntax-language" class="form-label">Property editor syntax language</label>
+              <select class="form-select" id="config-syntax-language" aria-describedby="config-syntax-language-help">
+                <option value="none">Other / Plain text</option>
+                <option value="javascript">JavaScript</option>
+                <option value="java">Java</option>
+                <option value="python">Python</option>
+                <option value="ctl">CTL</option>
+              </select>
+              <div class="form-text" id="config-syntax-language-help">Controls which keywords are highlighted when syntax highlighting is enabled.</div>
+            </div>
             <div class="text-danger small" id="app-settings-error" role="alert" aria-live="assertive"></div>
           </div>
           <div class="modal-footer">
@@ -366,9 +378,9 @@
     <div class="modal fade" id="property-editor-modal" tabindex="-1" aria-labelledby="property-editor-title" aria-hidden="true">
       <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable property-editor-dialog">
         <div class="modal-content">
-          <div class="modal-header">
-            <div class="property-editor-header">
-              <h5 class="modal-title" id="property-editor-title">Property Editor</h5>
+          <div class="modal-header d-flex align-items-center justify-content-between">
+            <div class="property-editor-header d-flex align-items-center gap-3">
+              <h5 class="modal-title mb-0" id="property-editor-title">Property Editor</h5>
               <button type="button" class="btn btn-link btn-sm p-0 property-editor-key-display" id="property-editor-key-display" title="Edit property name"></button>
               <div class="input-group input-group-sm property-editor-key-edit d-none" id="property-editor-key-edit">
                 <input type="text" class="form-control font-monospace" id="property-editor-key-input" autocomplete="off">
@@ -376,12 +388,24 @@
                 <button class="btn btn-outline-secondary" type="button" id="property-editor-key-cancel" title="Cancel rename">Cancel</button>
               </div>
             </div>
+            <div class="flex-grow-1"></div>
+            <div class="d-flex flex-column align-items-end" style="min-width: 140px;">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="property-editor-syntax-toggle" role="switch">
+                <label class="form-check-label" for="property-editor-syntax-toggle">Syntax highlight</label>
+              </div>
+              <span class="small text-muted mt-1" id="property-editor-syntax-label">Language: —</span>
+            </div>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" title="Close"></button>
           </div>
           <div class="modal-body property-editor-body">
             <div class="text-danger small property-editor-key-error d-none" id="property-editor-key-error" role="alert" aria-live="polite"></div>
             <div class="mb-2 text-muted small" id="property-editor-path">root</div>
-            <textarea class="form-control font-monospace property-editor-input" id="property-editor-input" rows="18"></textarea>
+            <!-- Syntax highlight switch and language label moved to modal header -->
+            <div class="property-editor-input-wrapper" id="property-editor-input-wrapper">
+              <pre class="property-editor-highlight" id="property-editor-highlight" aria-hidden="true"><code class="hljs language-none" id="property-editor-highlight-code"></code></pre>
+              <textarea class="form-control font-monospace property-editor-input" id="property-editor-input" rows="18"></textarea>
+            </div>
             <div class="d-flex justify-content-between align-items-center mt-2 small text-muted">
               <span id="property-editor-caret">Ln 1, Col 1</span>
             </div>
@@ -489,6 +513,11 @@
     </div>
 
     <script src="scripts/bootstrap.bundle.min.js"></script>
+    <script src="scripts/highlight/highlight.min.js"></script>
+    <script src="scripts/highlight/javascript.min.js"></script>
+    <script src="scripts/highlight/java.min.js"></script>
+    <script src="scripts/highlight/python.min.js"></script>
+    <script src="scripts/highlight/ctl.js"></script>
     <script type="module">
       // Import Tauri API if running in Tauri context
       if (window.__TAURI__) {

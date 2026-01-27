@@ -1,0 +1,72 @@
+pre code.hljs{display:block;overflow-x:auto;padding:1em}
+code.hljs{padding:3px 5px}
+
+/* LIGHT */
+.hljs{color:#24292e;background:#ffffff}
+
+/* KEYWORDS / TYPES */
+.hljs-keyword,.hljs-doctag,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{
+  color:#b31d28;font-weight:600
+}
+
+/* FUNCTION NAMES (defs + calls) */
+.hljs-title.function_{color:#5a32a3;font-weight:600;border-bottom:0 !important;text-decoration:none !important}
+
+/* Class titles */
+.hljs-title.class_,.hljs-title.class_.inherited__{color:#5a32a3;font-weight:600}
+
+/* Vars / nums / literals / operators / attrs */
+.hljs-variable,.hljs-number,.hljs-literal,.hljs-operator,.hljs-attr,.hljs-attribute{color:#0050b3}
+
+/* Strings */
+.hljs-string,.hljs-meta .hljs-string,.hljs-regexp{color:#032f62}
+
+/* Builtins / symbols */
+.hljs-built_in,.hljs-symbol{color:#c24a00}
+
+/* Comments */
+.hljs-comment,.hljs-code,.hljs-formula{color:#6a737d}
+
+/* Names / selectors */
+.hljs-name,.hljs-quote,.hljs-selector-pseudo,.hljs-selector-tag{color:#22863a}
+
+.hljs-subst{color:#24292e}
+.hljs-section{color:#0050b3;font-weight:700}
+.hljs-bullet{color:#735c0f}
+.hljs-emphasis{font-style:italic}
+.hljs-strong{font-weight:700}
+.hljs-punctuation{color:#57606a}
+
+/* CTL: $in.0. / $out.0. prefix (scope variable.special => hljs-variable + hljs-special) */
+.hljs-variable.hljs-special{color:#8a6a00;font-weight:600}
+/* (fallback, in case some build emits plain 'special') */
+.hljs-variable.special{color:#8a6a00;font-weight:600}
+
+/* DARK */
+@media (prefers-color-scheme: dark){
+  .hljs{background:#0d1117;color:#c9d1d9}
+
+  .hljs-keyword,.hljs-doctag,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{
+    color:#ff7b72;font-weight:700
+  }
+
+  .hljs-title.function_{color:#d2a8ff;font-weight:700;border-bottom:0 !important;text-decoration:none !important}
+  .hljs-title.class_,.hljs-title.class_.inherited__{color:#d2a8ff;font-weight:700}
+
+  .hljs-variable,.hljs-number,.hljs-literal,.hljs-operator,.hljs-attr,.hljs-attribute{color:#79c0ff}
+  .hljs-string,.hljs-meta .hljs-string,.hljs-regexp{color:#a5d6ff}
+  .hljs-built_in,.hljs-symbol{color:#ffa657}
+  .hljs-comment,.hljs-code,.hljs-formula{color:#8b949e}
+  .hljs-name,.hljs-quote,.hljs-selector-pseudo,.hljs-selector-tag{color:#7ee787}
+
+  .hljs-subst{color:#c9d1d9}
+  .hljs-section{color:#79c0ff;font-weight:700}
+  .hljs-bullet{color:#f2cc60}
+  .hljs-emphasis{font-style:italic}
+  .hljs-strong{font-weight:700}
+  .hljs-punctuation{color:#8b949e}
+
+  /* CTL: $in.0. / $out.0. prefix */
+  .hljs-variable.hljs-special{color:#f2cc60;font-weight:700}
+  .hljs-variable.special{color:#f2cc60;font-weight:700}
+}

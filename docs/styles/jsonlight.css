@@ -56,6 +56,7 @@ main {
     min-height: clamp(280px, 40vh, 600px);
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
 }
 
 .property-editor-header {
@@ -123,7 +124,148 @@ body.theme-dark .append-data-status.append-data-status-warning {
     flex: 1;
     min-height: 240px;
     font-size: var(--editor-font-size, 0.9rem);
+    font-family: inherit;
+    line-height: 1.5;
+    padding: 0.375rem 0.75rem;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    tab-size: 4;
+    -moz-tab-size: 4;
     resize: none;
+    width: 100%;
+    height: 100%;
+    display: block;
+    letter-spacing: normal;
+    word-spacing: normal;
+    font-variant-ligatures: none;
+}
+
+.property-editor-input-wrapper {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+    background-color: var(--bs-body-bg, #fff);
+    border-radius: 0.375rem;
+    font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+    font-size: var(--editor-font-size, 0.9rem);
+}
+
+body.theme-dark .property-editor-input-wrapper {
+    background-color: #0b1220;
+}
+
+.property-editor-highlight {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0.375rem 0.75rem;
+    overflow: auto;
+    pointer-events: none;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    box-sizing: border-box;
+    tab-size: 4;
+    -moz-tab-size: 4;
+    letter-spacing: normal;
+    word-spacing: normal;
+    font-variant-ligatures: none;
+    z-index: 1;
+}
+
+.property-editor-highlight code {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    display: block;
+    white-space: inherit;
+}
+
+.property-editor-input-wrapper.syntax-enabled .property-editor-input {
+    color: transparent;
+    caret-color: var(--bs-body-color, #212529);
+    -webkit-text-fill-color: transparent;
+    background-color: transparent;
+    position: relative;
+    z-index: 2;
+}
+
+body.theme-dark .property-editor-input-wrapper.syntax-enabled .property-editor-input {
+    caret-color: #f8fafc;
+}
+
+.property-editor-input-wrapper.syntax-enabled .property-editor-highlight {
+    display: block;
+}
+
+.property-editor-input-wrapper:not(.syntax-enabled) .property-editor-highlight {
+    display: none;
+}
+
+.property-editor-highlight,
+.property-editor-highlight code,
+.property-editor-highlight .hljs {
+    text-shadow: none !important;
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+}
+
+.property-editor-highlight .hljs {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent;
+}
+
+body.theme-dark .property-editor-highlight .hljs {
+    background: transparent;
+    color: #e2e8f0;
+}
+
+body.theme-dark .property-editor-highlight .hljs-comment,
+body.theme-dark .property-editor-highlight .hljs-quote {
+    color: #94a3b8;
+}
+
+body.theme-dark .property-editor-highlight .hljs-keyword,
+body.theme-dark .property-editor-highlight .hljs-selector-tag,
+body.theme-dark .property-editor-highlight .hljs-literal,
+body.theme-dark .property-editor-highlight .hljs-name,
+body.theme-dark .property-editor-highlight .hljs-built_in {
+    color: #a78bfa;
+}
+
+body.theme-dark .property-editor-highlight .hljs-string,
+body.theme-dark .property-editor-highlight .hljs-title,
+body.theme-dark .property-editor-highlight .hljs-section,
+body.theme-dark .property-editor-highlight .hljs-attr,
+body.theme-dark .property-editor-highlight .hljs-attribute {
+    color: #6ee7b7;
+}
+
+body.theme-dark .property-editor-highlight .hljs-number,
+body.theme-dark .property-editor-highlight .hljs-type,
+body.theme-dark .property-editor-highlight .hljs-symbol,
+body.theme-dark .property-editor-highlight .hljs-bullet {
+    color: #fbbf24;
+}
+
+body.theme-dark .property-editor-highlight .hljs-function,
+body.theme-dark .property-editor-highlight .hljs-class,
+body.theme-dark .property-editor-highlight .hljs-title.class_ {
+    color: #f97316;
 }
 
 .property-editor-footer {

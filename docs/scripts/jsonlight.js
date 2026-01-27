@@ -72,11 +72,17 @@ const propertyEditorState = {
     replaceAllButton: document.querySelector("#property-editor-replace-all"),
     searchStatusLabel: document.querySelector("#property-editor-search-status"),
     searchErrorLabel: document.querySelector("#property-editor-search-error"),
+    syntaxToggle: document.querySelector("#property-editor-syntax-toggle"),
+    syntaxLabel: document.querySelector("#property-editor-syntax-label"),
+    syntaxWrapper: document.querySelector("#property-editor-input-wrapper"),
+    highlightBlock: document.querySelector("#property-editor-highlight"),
+    highlightCode: document.querySelector("#property-editor-highlight-code"),
     applyButton: document.querySelector("#property-editor-apply"),
     resizeHandle: document.querySelector("#property-editor-resize-handle"),
     modal: null,
     currentKvRoot: null,
     caretUpdateHandle: null,
+    syntaxUpdateHandle: null,
 };
 
 const appendDataState = {
@@ -157,7 +163,9 @@ const APP_CONFIG_DEFAULTS = {
     tabInsertion: PROPERTY_EDITOR_TAB_INSERTION,
     indentSize: PROPERTY_EDITOR_INDENT_STEP.length || 2,
     treeFontSize: 0.9,
-    editorFontSize: 0.9
+    editorFontSize: 0.9,
+    syntaxHighlighting: false,
+    syntaxLanguage: "none"
 };
 
 const appConfigState = {
@@ -171,6 +179,7 @@ const appConfigState = {
     indentSizeInput: document.querySelector("#config-indent-size"),
     treeFontSizeInput: document.querySelector("#config-tree-font-size"),
     editorFontSizeInput: document.querySelector("#config-editor-font-size"),
+    syntaxLanguageInput: document.querySelector("#config-syntax-language"),
     errorLabel: document.querySelector("#app-settings-error")
 };
 
@@ -182,7 +191,33 @@ const runtimeFormattingState = {
     editorFontSize: APP_CONFIG_DEFAULTS.editorFontSize
 };
 
+const PROPERTY_EDITOR_SYNTAX_LANGUAGES = {
+    none: { label: "Other / Plain text", hljs: "plaintext" },
+    javascript: { label: "JavaScript", hljs: "javascript" },
+    java: { label: "Java", hljs: "java" },
+    python: { label: "Python", hljs: "python" },
+    ctl: { label: "CTL", hljs: "ctl" }
+};
+
+function normalizeSyntaxLanguage(value) {
+    if (typeof value !== "string") return "none";
+    const key = value.toLowerCase();
+    return PROPERTY_EDITOR_SYNTAX_LANGUAGES[key] ? key : "none";
+}
+
+function getConfiguredSyntaxLanguage() {
+    return normalizeSyntaxLanguage(appConfigState.current?.syntaxLanguage);
+}
+
+function isSyntaxHighlightingEnabled() {
+    return !!appConfigState.current?.syntaxHighlighting;
+}
+
 updateRuntimeFormattingSettings();
+
+if (typeof window !== "undefined" && window.hljs && typeof window.hljs.configure === "function") {
+    window.hljs.configure({ ignoreUnescapedHTML: true });
+}
 
 function initializePropertyEditorDragSupport() {
     if (propertyEditorDragState.initialized || !propertyEditorState.modalElement) return;
@@ -591,6 +626,83 @@ function schedulePropertyEditorCaretUpdate() {
     }
 }
 
+function updatePropertyEditorSyntaxLabel() {
+    if (!propertyEditorState.syntaxLabel) return;
+    const languageKey = getConfiguredSyntaxLanguage();
+    const label = PROPERTY_EDITOR_SYNTAX_LANGUAGES[languageKey]?.label || "Other / Plain text";
+    propertyEditorState.syntaxLabel.textContent = `Language: ${label}`;
+}
+
+function applyPropertyEditorSyntaxLanguage() {
+    if (!propertyEditorState.highlightCode || !propertyEditorState.highlightBlock) return;
+    const languageKey = getConfiguredSyntaxLanguage();
+    const hljsLanguage = PROPERTY_EDITOR_SYNTAX_LANGUAGES[languageKey]?.hljs || "plaintext";
+    propertyEditorState.highlightCode.className = `hljs language-${hljsLanguage}`;
+    propertyEditorState.highlightBlock.className = `property-editor-highlight ${hljsLanguage}`;
+}
+
+function refreshPropertyEditorSyntaxPreview({ force } = {}) {
+    if (!propertyEditorState.textarea || !propertyEditorState.highlightCode) return;
+    const enabled = isSyntaxHighlightingEnabled();
+    if (!enabled && !force) return;
+    const source = propertyEditorState.textarea.value || "";
+    const languageKey = getConfiguredSyntaxLanguage();
+    const hljsLanguage = PROPERTY_EDITOR_SYNTAX_LANGUAGES[languageKey]?.hljs || "plaintext";
+    if (typeof window !== "undefined" && window.hljs && typeof window.hljs.highlight === "function") {
+        if (hljsLanguage !== "plaintext" && typeof window.hljs.getLanguage === "function" && window.hljs.getLanguage(hljsLanguage)) {
+            const result = window.hljs.highlight(source, { language: hljsLanguage, ignoreIllegals: true });
+            propertyEditorState.highlightCode.innerHTML = result.value;
+            propertyEditorState.highlightCode.className = `hljs language-${hljsLanguage}`;
+            return;
+        }
+        if (typeof window.hljs.highlightAuto === "function") {
+            const result = window.hljs.highlightAuto(source);
+            propertyEditorState.highlightCode.innerHTML = result.value;
+            propertyEditorState.highlightCode.className = "hljs";
+            return;
+        }
+    }
+    propertyEditorState.highlightCode.textContent = source;
+}
+
+function schedulePropertyEditorSyntaxRefresh() {
+    if (propertyEditorState.syntaxUpdateHandle) {
+        if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+            window.cancelAnimationFrame(propertyEditorState.syntaxUpdateHandle);
+        }
+        propertyEditorState.syntaxUpdateHandle = null;
+    }
+    if (!isSyntaxHighlightingEnabled()) return;
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        propertyEditorState.syntaxUpdateHandle = window.requestAnimationFrame(() => {
+            propertyEditorState.syntaxUpdateHandle = null;
+            refreshPropertyEditorSyntaxPreview();
+        });
+    }
+    else {
+        refreshPropertyEditorSyntaxPreview();
+    }
+}
+
+function syncPropertyEditorSyntaxScroll() {
+    if (!propertyEditorState.textarea || !propertyEditorState.highlightBlock) return;
+    propertyEditorState.highlightBlock.scrollTop = propertyEditorState.textarea.scrollTop;
+    propertyEditorState.highlightBlock.scrollLeft = propertyEditorState.textarea.scrollLeft;
+}
+
+function applyPropertyEditorSyntaxSettings() {
+    if (!propertyEditorState.syntaxWrapper) return;
+    const enabled = isSyntaxHighlightingEnabled();
+    propertyEditorState.syntaxWrapper.classList.toggle("syntax-enabled", enabled);
+    if (propertyEditorState.syntaxToggle) {
+        propertyEditorState.syntaxToggle.checked = enabled;
+    }
+    updatePropertyEditorSyntaxLabel();
+    applyPropertyEditorSyntaxLanguage();
+    refreshPropertyEditorSyntaxPreview({ force: true });
+    syncPropertyEditorSyntaxScroll();
+}
+
 function handlePropertyEditorKeyDown(event) {
     if (event.key !== "Tab" || event.altKey || event.metaKey || event.ctrlKey || !propertyEditorState.textarea) {
         return;
@@ -830,6 +942,7 @@ if (propertyEditorState.modalElement) {
         propertyEditorState.textarea.select();
         schedulePropertyEditorCaretUpdate();
         updatePropertyEditorSearchControls();
+        applyPropertyEditorSyntaxSettings();
     });
     propertyEditorState.modalElement.addEventListener("hidden.bs.modal", () => {
         propertyEditorState.currentKvRoot = null;
@@ -978,9 +1091,13 @@ if (propertyEditorState.textarea) {
     ["input", "keyup", "mouseup", "click"].forEach((eventName) => {
         propertyEditorState.textarea.addEventListener(eventName, () => {
             schedulePropertyEditorCaretUpdate();
+            schedulePropertyEditorSyntaxRefresh();
         });
     });
     propertyEditorState.textarea.addEventListener("keydown", handlePropertyEditorKeyDown);
+    propertyEditorState.textarea.addEventListener("scroll", () => {
+        syncPropertyEditorSyntaxScroll();
+    });
 }
 
 if (propertyEditorState.searchInput) {
@@ -1006,6 +1123,19 @@ if (propertyEditorState.replaceButton) {
 }
 if (propertyEditorState.replaceAllButton) {
     propertyEditorState.replaceAllButton.addEventListener("click", () => handlePropertyEditorReplaceAll());
+}
+
+if (propertyEditorState.syntaxToggle) {
+    propertyEditorState.syntaxToggle.addEventListener("change", () => {
+        const enabled = !!propertyEditorState.syntaxToggle.checked;
+        appConfigState.current = {
+            ...appConfigState.current,
+            syntaxHighlighting: enabled,
+            syntaxLanguage: getConfiguredSyntaxLanguage()
+        };
+        persistAppConfigToStorage(appConfigState.current);
+        applyPropertyEditorSyntaxSettings();
+    });
 }
 
 updatePropertyEditorSearchControls();
@@ -1061,7 +1191,22 @@ function populateAppConfigForm() {
     if (appConfigState.editorFontSizeInput) {
         appConfigState.editorFontSizeInput.value = `${runtimeFormattingState.editorFontSize}`;
     }
+    if (appConfigState.syntaxLanguageInput) {
+        appConfigState.syntaxLanguageInput.value = getConfiguredSyntaxLanguage();
+    }
     setAppConfigError("");
+
+    // Persist syntax language immediately when changed
+    if (appConfigState.syntaxLanguageInput) {
+        appConfigState.syntaxLanguageInput.addEventListener("change", function() {
+            const selectedSyntaxLanguage = normalizeSyntaxLanguage(appConfigState.syntaxLanguageInput.value);
+            appConfigState.current = {
+                ...appConfigState.current,
+                syntaxLanguage: selectedSyntaxLanguage
+            };
+            persistAppConfigToStorage(appConfigState.current);
+        });
+    }
 }
 
 function setAppConfigError(message) {
@@ -1104,6 +1249,7 @@ async function handleAppConfigSave() {
         }
         return;
     }
+    const selectedSyntaxLanguage = normalizeSyntaxLanguage(appConfigState.syntaxLanguageInput ? appConfigState.syntaxLanguageInput.value : "none");
     const rawTabValue = appConfigState.tabInsertionInput ? appConfigState.tabInsertionInput.value : "";
     const interpretedTabValue = interpretTabInsertionInput(rawTabValue);
     if (!interpretedTabValue) {
@@ -1118,11 +1264,14 @@ async function handleAppConfigSave() {
         indentSize: clampIndentSize(parsedIndentSize),
         tabInsertion: ensureValidTabInsertion(interpretedTabValue),
         treeFontSize: clampFontSize(parsedTreeFontSize),
-        editorFontSize: clampFontSize(parsedEditorFontSize)
+        editorFontSize: clampFontSize(parsedEditorFontSize),
+        syntaxHighlighting: isSyntaxHighlightingEnabled(),
+        syntaxLanguage: selectedSyntaxLanguage
     };
     appConfigState.current = nextConfig;
     updateRuntimeFormattingSettings();
     persistAppConfigToStorage(appConfigState.current);
+    applyPropertyEditorSyntaxSettings();
     await refreshPaginationAfterConfigChange();
     if (appConfigState.modal) {
         appConfigState.modal.hide();
@@ -1145,7 +1294,9 @@ function loadAppConfigFromStorage() {
             tabInsertion: ensureValidTabInsertion(parsed.tabInsertion),
             indentSize: clampIndentSize(parsed.indentSize),
             treeFontSize: clampFontSize(parsed.treeFontSize),
-            editorFontSize: clampFontSize(parsed.editorFontSize)
+            editorFontSize: clampFontSize(parsed.editorFontSize),
+            syntaxHighlighting: !!parsed.syntaxHighlighting,
+            syntaxLanguage: normalizeSyntaxLanguage(parsed.syntaxLanguage)
         };
         return nextConfig;
     }
@@ -1172,12 +1323,16 @@ function updateRuntimeFormattingSettings() {
     const sanitizedTabInsertion = ensureValidTabInsertion(appConfigState.current?.tabInsertion);
     const sanitizedTreeFontSize = clampFontSize(appConfigState.current?.treeFontSize);
     const sanitizedEditorFontSize = clampFontSize(appConfigState.current?.editorFontSize);
+    const sanitizedSyntaxHighlighting = !!appConfigState.current?.syntaxHighlighting;
+    const sanitizedSyntaxLanguage = normalizeSyntaxLanguage(appConfigState.current?.syntaxLanguage);
     appConfigState.current = {
         pageSize: sanitizedPageSize,
         indentSize: sanitizedIndentSize,
         tabInsertion: sanitizedTabInsertion,
         treeFontSize: sanitizedTreeFontSize,
-        editorFontSize: sanitizedEditorFontSize
+        editorFontSize: sanitizedEditorFontSize,
+        syntaxHighlighting: sanitizedSyntaxHighlighting,
+        syntaxLanguage: sanitizedSyntaxLanguage
     };
     runtimeFormattingState.tabInsertion = sanitizedTabInsertion;
     runtimeFormattingState.indentSize = sanitizedIndentSize;
@@ -3166,6 +3321,7 @@ function openPropertyEditor(kvRoot) {
     updatePropertyEditorKeyUI(kvRoot);
     updatePropertyEditorPath(loader);
     schedulePropertyEditorCaretUpdate();
+    applyPropertyEditorSyntaxSettings();
     propertyEditorState.modal.show();
 }
 
