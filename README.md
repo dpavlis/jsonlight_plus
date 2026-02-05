@@ -33,9 +33,10 @@ Unlike most JSON viewers, JSON Light properly renders multi-line string values w
 ### Advanced Editing Capabilities (Plus Version)
 This Plus version adds powerful editing features specifically designed for working with LLM training data formats like ShareGPT and Alpaca:
 
-- **Plain-text editing**: Edit JSON string properties as plain text—no manual escaping of newlines, quotes, or special characters
+- **Paging**: Split large JSON(L) files into manageable pages for easier navigation and editing
+- **Plain-text editing**: Edit JSON string properties as plain text—no manual escaping of newlines, quotes, or special characters (with optional syntax highlighting for working with code snippets)
 - **Duplicate & delete**: Quickly clone or remove array elements, perfect for managing conversational training examples
-- **Search & replace**: Find and modify content across your dataset efficiently
+- **Search & replace**: Find and modify content across your dataset efficiently (with Regex support for advanced use cases)
 
 ## Why This Fork Exists
 
