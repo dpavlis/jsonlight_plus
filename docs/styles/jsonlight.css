@@ -195,9 +195,12 @@ body.theme-dark .property-editor-input-wrapper {
 }
 
 .property-editor-input-wrapper.syntax-enabled .property-editor-input {
-    color: transparent;
+    /* Avoid fully transparent text in the textarea: some engines (notably macOS WebKit/WKWebView)
+       can glitch caret placement at line ends when the text is fully transparent.
+       Use an almost-transparent tokenized color instead so the caret/selection model stays stable. */
+    color: rgba(var(--bs-body-color-rgb, 33, 37, 41), 0.02);
     caret-color: var(--bs-body-color, #212529);
-    -webkit-text-fill-color: transparent;
+    -webkit-text-fill-color: rgba(var(--bs-body-color-rgb, 33, 37, 41), 0.02);
     background-color: transparent;
     position: relative;
     z-index: 2;

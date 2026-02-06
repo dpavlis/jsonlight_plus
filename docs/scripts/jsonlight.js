@@ -1459,6 +1459,10 @@ async function refreshPaginationAfterConfigChange() {
 /*************************************
  *              Search               *
  *************************************/
+// Delay before running search while the user is typing. This avoids the tree view
+// jumping/scrolling on every keystroke since `performSearch()` focuses the first match.
+const SEARCH_REFRESH_DEBOUNCE_MS = 500;
+
 const searchState = {
     query: "",
     isRegex: false,
@@ -1562,7 +1566,7 @@ function requestSearchRefresh() {
     searchRefreshHandle = setTimeout(() => {
         searchRefreshHandle = null;
         performSearch();
-    }, 75);
+    }, SEARCH_REFRESH_DEBOUNCE_MS);
 }
 
 function getLoaderPathSegments(loader) {
@@ -3883,7 +3887,9 @@ function applyPropertyRename() {
             nextValue[key] = parentValue[key];
         }
     });
-    loader.parentLoader.value = nextValue;
+    // Use updateValue so the new object reference is propagated to the parent-of-parent.
+    // Otherwise the UI can reflect the rename while the root JSON still points at the old object.
+    loader.parentLoader.updateValue(nextValue);
     loader.parentKey = newKey;
     updateKvRootKeyLabel(kvRoot, newKey);
     if (oldIdentifier && bulkSelectionState.has(oldIdentifier)) {
@@ -3936,7 +3942,9 @@ function applyPropertyEditorKeyRename(options = {}) {
             nextValue[key] = parentValue[key];
         }
     });
-    loader.parentLoader.value = nextValue;
+    // Use updateValue so the new object reference is propagated to the parent-of-parent.
+    // Otherwise the UI can reflect the rename while the root JSON still points at the old object.
+    loader.parentLoader.updateValue(nextValue);
     loader.parentKey = newKey;
     updateKvRootKeyLabel(kvRoot, newKey);
     updatePropertyEditorPath(loader);
