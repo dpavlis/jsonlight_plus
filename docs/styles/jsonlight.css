@@ -443,6 +443,34 @@ body.theme-dark .search-property-options {
     flex-shrink: 0;
 }
 
+.bulk-selection-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.bulk-selection-button {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bulk-action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.bulk-action-button {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .kv.search-current {
     background-color: #fff3cd;
     border-radius: 0.25rem;

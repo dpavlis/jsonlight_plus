@@ -239,8 +239,18 @@
           <span>Selected items</span>
           <span id="bulk-selection-count" aria-live="polite">0</span>
         </div>
-        <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2" id="bulk-export-selected" disabled>Export selected</button>
-        <button type="button" class="btn btn-outline-danger btn-sm w-100" id="bulk-delete-selected" disabled>Delete selected</button>
+        <div class="bulk-selection-actions mb-2" role="group" aria-label="Bulk selection actions">
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-select-all" disabled data-bs-toggle="tooltip" data-bs-title="Select all" aria-label="Select all">☑</button>
+          <span data-bs-toggle="tooltip" data-bs-title="Select filtered items based on the active search/filter. Run a search to enable this action." tabindex="0">
+            <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-select-filtered" disabled aria-label="Select filtered">◎</button>
+          </span>
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-clear-selection" disabled data-bs-toggle="tooltip" data-bs-title="Clear selection" aria-label="Clear selection">☐</button>
+        </div>
+        <div class="bulk-action-buttons mb-2" role="group" aria-label="Bulk item actions">
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-export-selected" disabled data-bs-toggle="tooltip" data-bs-title="Export selected" aria-label="Export selected">⤓</button>
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-copy-selected" disabled data-bs-toggle="tooltip" data-bs-title="Copy to clipboard" aria-label="Copy to clipboard">⎘</button>
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-delete-selected" disabled data-bs-toggle="tooltip" data-bs-title="Delete selected" aria-label="Delete selected">×</button>
+        </div>
       </div>
       <div class="mb-auto"></div>
       <div id="file-name-display" class="text-muted small text-break" style="display: none;" title="">
@@ -400,6 +410,7 @@
           </div>
           <div class="modal-body property-editor-body">
             <div class="text-danger small property-editor-key-error d-none" id="property-editor-key-error" role="alert" aria-live="polite"></div>
+            <div class="text-danger small property-editor-value-error d-none" id="property-editor-value-error" role="alert" aria-live="polite"></div>
             <div class="mb-2 text-muted small" id="property-editor-path">root</div>
             <!-- Syntax highlight switch and language label moved to modal header -->
             <div class="property-editor-input-wrapper" id="property-editor-input-wrapper">

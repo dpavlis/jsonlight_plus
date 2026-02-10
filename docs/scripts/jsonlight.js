@@ -62,6 +62,7 @@ const propertyEditorState = {
     keyApplyButton: document.querySelector("#property-editor-key-apply"),
     keyCancelButton: document.querySelector("#property-editor-key-cancel"),
     keyErrorLabel: document.querySelector("#property-editor-key-error"),
+    valueErrorLabel: document.querySelector("#property-editor-value-error"),
     pathLabel: document.querySelector("#property-editor-path"),
     positionLabel: document.querySelector("#property-editor-caret"),
     searchInput: document.querySelector("#property-editor-search-input"),
@@ -83,6 +84,7 @@ const propertyEditorState = {
     currentKvRoot: null,
     caretUpdateHandle: null,
     syntaxUpdateHandle: null,
+    valueMode: "string"
 };
 
 const appendDataState = {
@@ -947,6 +949,7 @@ if (propertyEditorState.modalElement) {
     });
     propertyEditorState.modalElement.addEventListener("hidden.bs.modal", () => {
         propertyEditorState.currentKvRoot = null;
+        propertyEditorState.valueMode = "string";
         if (propertyEditorState.positionLabel) {
             propertyEditorState.positionLabel.textContent = "Ln 1, Col 1";
         }
@@ -957,6 +960,7 @@ if (propertyEditorState.modalElement) {
         if (propertyEditorState.keyEditor) propertyEditorState.keyEditor.classList.add("d-none");
         if (propertyEditorState.keyDisplay) propertyEditorState.keyDisplay.classList.remove("d-none");
         setPropertyEditorKeyError("");
+        setPropertyEditorValueError("");
         setPropertyEditorSearchStatus("", "info");
     });
 }
@@ -1000,11 +1004,32 @@ initializePropertyEditorResizeSupport();
 if (propertyEditorState.applyButton) {
     propertyEditorState.applyButton.addEventListener("click", () => {
         if (!propertyEditorState.currentKvRoot || !propertyEditorState.textarea) return;
-        const newValue = propertyEditorState.textarea.value;
+        let newValue = propertyEditorState.textarea.value;
         const loader = propertyEditorState.currentKvRoot.loader;
         if (propertyEditorState.keyEditor && !propertyEditorState.keyEditor.classList.contains("d-none")) {
             const renameResult = applyPropertyEditorKeyRename({ silent: true });
             if (!renameResult.success) {
+                return;
+            }
+        }
+        if (propertyEditorState.valueMode === "json") {
+            const raw = newValue.trim();
+            if (!raw) {
+                setPropertyEditorValueError("Enter a valid JSON value.");
+                if (propertyEditorState.textarea) {
+                    propertyEditorState.textarea.focus();
+                }
+                return;
+            }
+            try {
+                newValue = JSON.parse(raw);
+            }
+            catch (error) {
+                const message = error && error.message ? `Invalid JSON value: ${error.message}` : "Invalid JSON value.";
+                setPropertyEditorValueError(message);
+                if (propertyEditorState.textarea) {
+                    propertyEditorState.textarea.focus();
+                }
                 return;
             }
         }
@@ -1093,6 +1118,7 @@ if (propertyEditorState.textarea) {
         propertyEditorState.textarea.addEventListener(eventName, () => {
             schedulePropertyEditorCaretUpdate();
             schedulePropertyEditorSyntaxRefresh();
+            setPropertyEditorValueError("");
         });
     });
     propertyEditorState.textarea.addEventListener("keydown", handlePropertyEditorKeyDown);
@@ -2786,6 +2812,7 @@ function updateSearchControls() {
     const canReplaceNow = hasMatches && !!searchState.query;
     if (replaceAllButton) replaceAllButton.disabled = !canReplaceNow;
     if (replaceButton) replaceButton.disabled = !canReplaceNow;
+    updateBulkControls();
 }
 
 function getSearchRegex(global, options = {}) {
@@ -3355,7 +3382,20 @@ function openPropertyEditor(kvRoot) {
     propertyEditorState.currentKvRoot = kvRoot;
     const loader = kvRoot.loader;
     const value = loader ? loader.getValue() : "";
-    propertyEditorState.textarea.value = typeof value === "string" ? value : "";
+    if (typeof value === "string") {
+        propertyEditorState.valueMode = "string";
+        propertyEditorState.textarea.value = value;
+    }
+    else {
+        propertyEditorState.valueMode = "json";
+        try {
+            propertyEditorState.textarea.value = JSON.stringify(value);
+        }
+        catch (error) {
+            propertyEditorState.textarea.value = String(value ?? "");
+        }
+    }
+    setPropertyEditorValueError("");
     updatePropertyEditorKeyUI(kvRoot);
     updatePropertyEditorPath(loader);
     schedulePropertyEditorCaretUpdate();
@@ -3789,6 +3829,18 @@ function setPropertyEditorKeyError(message) {
     }
 }
 
+function setPropertyEditorValueError(message) {
+    if (!propertyEditorState.valueErrorLabel) return;
+    if (message) {
+        propertyEditorState.valueErrorLabel.textContent = message;
+        propertyEditorState.valueErrorLabel.classList.remove("d-none");
+    }
+    else {
+        propertyEditorState.valueErrorLabel.textContent = "";
+        propertyEditorState.valueErrorLabel.classList.add("d-none");
+    }
+}
+
 function updatePropertyEditorKeyUI(kvRoot) {
     if (!propertyEditorState.keyDisplay) return;
     const loader = kvRoot ? kvRoot.loader : null;
@@ -4087,14 +4139,17 @@ function renderString(kvRoot, jobj) {
 }
 
 function renderNumber(kvRoot, jobj) {
+    addEditButton(kvRoot);
     return renderStringify(jobj);
 }
 
 function renderBool(kvRoot, jobj) {
+    addEditButton(kvRoot);
     return renderStringify(jobj);
 }
 
 function renderNull(kvRoot, jobj) {
+    addEditButton(kvRoot);
     return renderStringify(jobj);
 }
 
@@ -4537,11 +4592,25 @@ function updateBulkControls() {
     if (bulkDeleteContainer) {
         bulkDeleteContainer.style.display = bulkOperationsEnabled ? "" : "none";
     }
+    const hasSelection = bulkSelectionState.size > 0;
+    const hasFilterMatches = !!searchState.query && !searchState.error && searchState.matches.length > 0;
+    if (bulkSelectAllButton) {
+        bulkSelectAllButton.disabled = !bulkOperationsEnabled;
+    }
+    if (bulkSelectFilteredButton) {
+        bulkSelectFilteredButton.disabled = !bulkOperationsEnabled || !hasFilterMatches;
+    }
+    if (bulkClearSelectionButton) {
+        bulkClearSelectionButton.disabled = !bulkOperationsEnabled || !hasSelection;
+    }
     if (bulkDeleteButton) {
-        bulkDeleteButton.disabled = !bulkOperationsEnabled || bulkSelectionState.size === 0;
+        bulkDeleteButton.disabled = !bulkOperationsEnabled || !hasSelection;
     }
     if (bulkExportButton) {
-        bulkExportButton.disabled = !bulkOperationsEnabled || bulkSelectionState.size === 0;
+        bulkExportButton.disabled = !bulkOperationsEnabled || !hasSelection;
+    }
+    if (bulkCopyButton) {
+        bulkCopyButton.disabled = !bulkOperationsEnabled || !hasSelection;
     }
     if (bulkSelectionCountLabel) {
         const count = bulkOperationsEnabled ? bulkSelectionState.size : 0;
@@ -4565,6 +4634,110 @@ function setBulkOperationsEnabled(enabled) {
     setBulkModeClass(bulkOperationsEnabled);
     updateBulkControls();
     refreshBulkCheckboxesDisplay();
+}
+
+async function copyTextToClipboard(text) {
+    if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+        return true;
+    }
+    if (typeof document === "undefined") return false;
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    let succeeded = false;
+    try {
+        succeeded = document.execCommand("copy");
+    }
+    catch (error) {
+        succeeded = false;
+    }
+    textarea.remove();
+    return succeeded;
+}
+
+function buildBulkIdentifierForKey(key) {
+    if (typeof key === "number" && Number.isInteger(key)) {
+        return `n:${key}`;
+    }
+    if (typeof key === "string") {
+        return `s:${key}`;
+    }
+    return null;
+}
+
+function getSelectableRootKeys() {
+    if (!g_currentRootLoader) return [];
+    const rootValue = g_currentRootLoader.getValue();
+    if (Array.isArray(rootValue)) {
+        return rootValue.map((_, index) => index);
+    }
+    if (rootValue && typeof rootValue === "object") {
+        return Object.keys(rootValue);
+    }
+    return [];
+}
+
+function setBulkSelectionFromKeys(keys) {
+    clearBulkSelectionState();
+    (keys || []).forEach((key) => {
+        const identifier = buildBulkIdentifierForKey(key);
+        if (!identifier) return;
+        bulkSelectionState.set(identifier, key);
+    });
+    updateBulkControls();
+    refreshBulkCheckboxesDisplay();
+}
+
+function handleBulkClearSelection() {
+    if (!bulkOperationsEnabled) return;
+    clearBulkSelectionState();
+    updateBulkControls();
+    refreshBulkCheckboxesDisplay();
+}
+
+function handleBulkSelectAll() {
+    if (!bulkOperationsEnabled) return;
+    if (!g_currentRootLoader) return;
+    const keys = getSelectableRootKeys();
+    if (!keys.length) {
+        alert("No items available to select.");
+        return;
+    }
+    setBulkSelectionFromKeys(keys);
+}
+
+function handleBulkSelectFiltered() {
+    if (!bulkOperationsEnabled) return;
+    if (!searchState.query || searchState.error) {
+        alert("Run a search to select filtered items.");
+        return;
+    }
+    if (searchState.matches.length === 0) {
+        alert("No filter matches to select.");
+        return;
+    }
+    const keys = new Set();
+    searchState.matches.forEach((match) => {
+        if (!match || !Array.isArray(match.path) || match.path.length === 0) return;
+        const rootKey = match.path[0];
+        if (typeof rootKey === "number" && Number.isInteger(rootKey)) {
+            keys.add(rootKey);
+            return;
+        }
+        if (typeof rootKey === "string") {
+            keys.add(rootKey);
+        }
+    });
+    if (keys.size === 0) {
+        alert("No filter matches at the root level.");
+        return;
+    }
+    setBulkSelectionFromKeys(Array.from(keys));
 }
 
 async function handleBulkDeleteSelected() {
@@ -4709,6 +4882,46 @@ async function handleBulkExportSelected() {
     }
 }
 
+async function handleBulkCopySelected() {
+    if (!bulkOperationsEnabled) return;
+    pruneBulkSelectionAgainstRoot();
+    if (bulkSelectionState.size === 0) {
+        updateBulkControls();
+        alert("Select at least one item to copy.");
+        return;
+    }
+    if (!g_currentRootLoader) return;
+    const rootValue = g_currentRootLoader.getValue();
+    if (rootValue == null || typeof rootValue !== "object") {
+        alert("Bulk copy requires a JSON object or array at the root level.");
+        return;
+    }
+    const entries = collectBulkSelectedEntries(rootValue);
+    if (entries.length === 0) {
+        updateBulkControls();
+        alert("Selected items are no longer available.");
+        return;
+    }
+    const format = getFileOperationMode();
+    const isArrayRoot = Array.isArray(rootValue);
+    const payload = format === FILE_MODE_JSONL
+        ? buildBulkExportJsonl(entries, isArrayRoot)
+        : buildBulkExportJson(entries, isArrayRoot);
+    if (!payload) {
+        alert("Nothing to copy.");
+        return;
+    }
+    try {
+        const copied = await copyTextToClipboard(payload);
+        if (!copied) {
+            alert("Unable to copy to clipboard.");
+        }
+    }
+    catch (error) {
+        alert("Unable to copy to clipboard.");
+    }
+}
+
 function initializeTooltips() {
     if (typeof document === "undefined" || typeof bootstrap === "undefined") return;
     const tooltipElements = Array.from(document.querySelectorAll("[data-bs-toggle='tooltip']"));
@@ -4789,6 +5002,10 @@ const bulkSelectionState = new Map();
 let bulkToggleInput = null;
 let bulkDeleteButton = null;
 let bulkExportButton = null;
+let bulkCopyButton = null;
+let bulkSelectAllButton = null;
+let bulkSelectFilteredButton = null;
+let bulkClearSelectionButton = null;
 let bulkDeleteContainer = null;
 let bulkSelectionCountLabel = null;
 let expandCollapseToggleButton = null;
@@ -5655,6 +5872,10 @@ if (editingToggle) {
 bulkToggleInput = document.querySelector("#toggle-bulk-operations");
 bulkDeleteButton = document.querySelector("#bulk-delete-selected");
 bulkExportButton = document.querySelector("#bulk-export-selected");
+bulkCopyButton = document.querySelector("#bulk-copy-selected");
+bulkSelectAllButton = document.querySelector("#bulk-select-all");
+bulkSelectFilteredButton = document.querySelector("#bulk-select-filtered");
+bulkClearSelectionButton = document.querySelector("#bulk-clear-selection");
 bulkDeleteContainer = document.querySelector("#bulk-operations-actions");
 bulkSelectionCountLabel = document.querySelector("#bulk-selection-count");
 if (bulkToggleInput) {
@@ -5671,6 +5892,26 @@ if (bulkDeleteButton) {
 if (bulkExportButton) {
     bulkExportButton.addEventListener("click", () => {
         handleBulkExportSelected();
+    });
+}
+if (bulkCopyButton) {
+    bulkCopyButton.addEventListener("click", () => {
+        handleBulkCopySelected();
+    });
+}
+if (bulkSelectAllButton) {
+    bulkSelectAllButton.addEventListener("click", () => {
+        handleBulkSelectAll();
+    });
+}
+if (bulkSelectFilteredButton) {
+    bulkSelectFilteredButton.addEventListener("click", () => {
+        handleBulkSelectFiltered();
+    });
+}
+if (bulkClearSelectionButton) {
+    bulkClearSelectionButton.addEventListener("click", () => {
+        handleBulkClearSelection();
     });
 }
 updateBulkControls();
