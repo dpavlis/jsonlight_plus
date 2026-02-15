@@ -354,6 +354,11 @@ body.bulk-mode-enabled .bulk-checkbox-wrapper {
     font-size: 0.8rem;
 }
 
+.btn-wrap {
+    white-space: normal;
+    line-height: 1.1;
+}
+
 .search-property-options {
     max-height: 140px;
     overflow-y: auto;

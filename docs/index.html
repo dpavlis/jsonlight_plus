@@ -205,16 +205,25 @@
             </div>
             <div class="d-flex gap-2">
               <button
-                class="btn btn-outline-secondary btn-sm flex-fill btn-text-small"
+                class="btn btn-outline-secondary btn-sm flex-fill btn-text-small btn-wrap"
                 type="button"
                 id="replace-current"
-                aria-label="Replace current match"
-                title="Replace current match"
+                aria-label="Replace current match without moving"
+                title="Replace current match without moving"
               >
                 Replace
               </button>
               <button
-                class="btn btn-outline-secondary btn-sm flex-fill btn-text-small"
+                class="btn btn-outline-secondary btn-sm flex-fill btn-text-small btn-wrap"
+                type="button"
+                id="replace-next"
+                aria-label="Replace current match and move to next"
+                title="Replace current match and move to next"
+              >
+                Replace & Next
+              </button>
+              <button
+                class="btn btn-outline-secondary btn-sm flex-fill btn-text-small btn-wrap"
                 type="button"
                 id="replace-all"
                 aria-label="Replace every match"
@@ -432,8 +441,9 @@
               </div>
               <div class="input-group input-group-sm mb-2">
                 <input type="text" class="form-control" id="property-editor-replace-input" placeholder="Replace with">
-                <button class="btn btn-outline-secondary" type="button" id="property-editor-replace-current" title="Replace current selection">Replace</button>
-                <button class="btn btn-outline-secondary" type="button" id="property-editor-replace-all" title="Replace every occurrence">Replace All</button>
+                <button class="btn btn-outline-secondary btn-text-small btn-wrap" type="button" id="property-editor-replace-current" title="Replace current selection without moving">Replace</button>
+                <button class="btn btn-outline-secondary btn-text-small btn-wrap" type="button" id="property-editor-replace-next" title="Replace current selection and find next match">Replace & Next</button>
+                <button class="btn btn-outline-secondary btn-text-small btn-wrap" type="button" id="property-editor-replace-all" title="Replace every occurrence">Replace All</button>
               </div>
               <div class="text-danger small" id="property-editor-search-error"></div>
             </div>

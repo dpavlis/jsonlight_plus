@@ -70,6 +70,7 @@ const propertyEditorState = {
     searchNextButton: document.querySelector("#property-editor-find-next"),
     replaceInput: document.querySelector("#property-editor-replace-input"),
     replaceButton: document.querySelector("#property-editor-replace-current"),
+    replaceNextButton: document.querySelector("#property-editor-replace-next"),
     replaceAllButton: document.querySelector("#property-editor-replace-all"),
     searchStatusLabel: document.querySelector("#property-editor-search-status"),
     searchErrorLabel: document.querySelector("#property-editor-search-error"),
@@ -818,6 +819,7 @@ function updatePropertyEditorSearchControls() {
     if (propertyEditorState.searchPrevButton) propertyEditorState.searchPrevButton.disabled = !hasQuery;
     if (propertyEditorState.searchNextButton) propertyEditorState.searchNextButton.disabled = !hasQuery;
     if (propertyEditorState.replaceButton) propertyEditorState.replaceButton.disabled = !hasQuery;
+    if (propertyEditorState.replaceNextButton) propertyEditorState.replaceNextButton.disabled = !hasQuery;
     if (propertyEditorState.replaceAllButton) propertyEditorState.replaceAllButton.disabled = !hasQuery;
     if (!hasQuery) {
         setPropertyEditorSearchStatus("", "info");
@@ -890,7 +892,7 @@ function handlePropertyEditorFind(direction) {
     setPropertyEditorSearchStatus(`Match at Ln ${line}, Col ${column}`, "info");
 }
 
-function handlePropertyEditorReplaceCurrent() {
+function handlePropertyEditorReplaceCurrent(advanceToNext = false) {
     if (!propertyEditorState.textarea) return;
     const query = getPropertyEditorSearchQuery();
     if (!query) {
@@ -902,7 +904,12 @@ function handlePropertyEditorReplaceCurrent() {
         propertyEditorState.textarea.selectionEnd ?? 0
     );
     if (selection !== query) {
-        handlePropertyEditorFind(propertyEditorSearchState.lastDirection >= 0 ? 1 : -1);
+        if (advanceToNext) {
+            handlePropertyEditorFind(propertyEditorSearchState.lastDirection >= 0 ? 1 : -1);
+        }
+        else {
+            setPropertyEditorSearchStatus("Select a match to replace.", "error");
+        }
         return;
     }
     const replacement = getPropertyEditorReplaceText();
@@ -914,7 +921,9 @@ function handlePropertyEditorReplaceCurrent() {
     );
     schedulePropertyEditorCaretUpdate();
     setPropertyEditorSearchStatus("Replaced current match.", "info");
-    handlePropertyEditorFind(1);
+    if (advanceToNext) {
+        handlePropertyEditorFind(1);
+    }
 }
 
 function handlePropertyEditorReplaceAll() {
@@ -1147,7 +1156,10 @@ if (propertyEditorState.searchNextButton) {
     propertyEditorState.searchNextButton.addEventListener("click", () => handlePropertyEditorFind(1));
 }
 if (propertyEditorState.replaceButton) {
-    propertyEditorState.replaceButton.addEventListener("click", () => handlePropertyEditorReplaceCurrent());
+    propertyEditorState.replaceButton.addEventListener("click", () => handlePropertyEditorReplaceCurrent(false));
+}
+if (propertyEditorState.replaceNextButton) {
+    propertyEditorState.replaceNextButton.addEventListener("click", () => handlePropertyEditorReplaceCurrent(true));
 }
 if (propertyEditorState.replaceAllButton) {
     propertyEditorState.replaceAllButton.addEventListener("click", () => handlePropertyEditorReplaceAll());
@@ -1520,6 +1532,7 @@ let searchRefreshOptions = { preserveFocus: false };
 let replaceInput = document.querySelector("#replace-input");
 let replaceAllButton = document.querySelector("#replace-all");
 let replaceButton = document.querySelector("#replace-current");
+let replaceNextButton = document.querySelector("#replace-next");
 let searchCollapseToggle = document.querySelector("#search-collapse-toggle");
 let searchCollapse = document.querySelector("#search-collapse");
 let searchPropertySuggestions = document.querySelector("#search-property-suggestions");
@@ -2840,6 +2853,7 @@ function updateSearchControls() {
     const canReplaceNow = hasMatches && !!searchState.query;
     if (replaceAllButton) replaceAllButton.disabled = !canReplaceNow;
     if (replaceButton) replaceButton.disabled = !canReplaceNow;
+    if (replaceNextButton) replaceNextButton.disabled = !canReplaceNow;
     updateBulkControls();
 }
 
@@ -3024,13 +3038,26 @@ async function replaceValueAtPath(path, replaceAllOccurrences, matchDetails = nu
 async function replaceCurrentMatch(advanceToNext) {
     if (!canPerformReplacement()) return;
     if (searchState.currentIndex === -1) {
-        await focusSearchResultByIndex(0);
+        if (advanceToNext) {
+            await focusSearchResultByIndex(0);
+        }
+        else {
+            if (searchStatusLabel) {
+                searchStatusLabel.textContent = "No active match to replace.";
+            }
+            return;
+        }
     }
     if (searchState.currentIndex === -1) return;
     const currentMatch = searchState.matches[searchState.currentIndex];
     if (!currentMatch) return;
     if (currentMatch.matchSource !== "value") {
-        moveSearch(1);
+        if (advanceToNext) {
+            moveSearch(1);
+        }
+        else if (searchStatusLabel) {
+            searchStatusLabel.textContent = "Select a value match to replace.";
+        }
         return;
     }
     const currentPath = clonePath(currentMatch.path);
@@ -3053,7 +3080,12 @@ async function replaceCurrentMatch(advanceToNext) {
             : null;
     }
     searchState.lastFocusedPath = desiredInfo;
-    performSearch();
+    if (advanceToNext) {
+        performSearch();
+    }
+    else {
+        performSearch({ preserveFocus: true });
+    }
 }
 
 async function replaceAllMatches() {
@@ -6039,6 +6071,11 @@ if (replaceAllButton) {
 }
 if (replaceButton) {
     replaceButton.addEventListener("click", () => {
+        replaceCurrentMatch(false);
+    });
+}
+if (replaceNextButton) {
+    replaceNextButton.addEventListener("click", () => {
         replaceCurrentMatch(true);
     });
 }
