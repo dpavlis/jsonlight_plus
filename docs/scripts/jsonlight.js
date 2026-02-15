@@ -1501,6 +1501,7 @@ const searchState = {
     lastRecordedQuery: "",
     lastFocusedPath: null,
     highlightInfo: null,
+    needsRefresh: false,
 };
 
 const searchPropertyFilterState = {
@@ -1515,6 +1516,7 @@ let searchNextButton = document.querySelector("#search-next");
 let searchStatusLabel = document.querySelector("#search-status");
 let searchErrorLabel = document.querySelector("#search-error");
 let searchRefreshHandle = null;
+let searchRefreshOptions = { preserveFocus: false };
 let replaceInput = document.querySelector("#replace-input");
 let replaceAllButton = document.querySelector("#replace-all");
 let replaceButton = document.querySelector("#replace-current");
@@ -1585,14 +1587,16 @@ if (topLevelPageNextButton) {
     });
 }
 
-function requestSearchRefresh() {
+function requestSearchRefresh(options = {}) {
     if (!searchInput) return;
+    searchState.needsRefresh = false;
+    searchRefreshOptions = { preserveFocus: false, ...options };
     if (searchRefreshHandle) {
         clearTimeout(searchRefreshHandle);
     }
     searchRefreshHandle = setTimeout(() => {
         searchRefreshHandle = null;
-        performSearch();
+        performSearch(searchRefreshOptions);
     }, SEARCH_REFRESH_DEBOUNCE_MS);
 }
 
@@ -2387,14 +2391,18 @@ function commitSearchHistory() {
     searchState.lastRecordedQuery = query;
 }
 
-function performSearch() {
+function performSearch(options = {}) {
     if (!searchInput) return;
+    searchState.needsRefresh = false;
+    const preserveFocus = !!options.preserveFocus;
     const query = searchInput.value.trim();
     searchState.query = query;
     searchState.matches = [];
-    searchState.currentIndex = -1;
     searchState.error = null;
-    setActiveSearchElement(null);
+    if (!preserveFocus) {
+        searchState.currentIndex = -1;
+        setActiveSearchElement(null);
+    }
     const previousQuery = searchState.lastQuery;
     searchState.lastQuery = query;
     if (query !== previousQuery) {
@@ -2402,7 +2410,11 @@ function performSearch() {
     }
 
     if (!query || !g_currentRootLoader) {
-        searchState.lastFocusedPath = null;
+        if (!preserveFocus) {
+            searchState.lastFocusedPath = null;
+            setActiveSearchElement(null);
+        }
+        searchState.currentIndex = -1;
         updateSearchControls();
         return;
     }
@@ -2419,7 +2431,11 @@ function performSearch() {
     collectSearchMatches(rootValue, [], pattern, propertyFilter);
 
     if (searchState.matches.length === 0) {
-        searchState.lastFocusedPath = null;
+        if (!preserveFocus) {
+            searchState.lastFocusedPath = null;
+            setActiveSearchElement(null);
+        }
+        searchState.currentIndex = -1;
         updateSearchControls();
         return;
     }
@@ -2429,7 +2445,18 @@ function performSearch() {
     if (preservedIndex !== -1) {
         focusIndex = preservedIndex;
     }
+    if (preserveFocus) {
+        searchState.currentIndex = preservedIndex !== -1 ? preservedIndex : -1;
+        updateSearchControls();
+        return;
+    }
     focusSearchResultByIndex(focusIndex);
+}
+
+function markSearchDirty() {
+    if (!searchInput) return;
+    if (!searchState.query) return;
+    searchState.needsRefresh = true;
 }
 
 function buildSearchPattern(query, isRegex) {
@@ -2927,6 +2954,9 @@ function isElementVisible(element) {
 
 function moveSearch(direction) {
     commitSearchHistory();
+    if (searchState.needsRefresh) {
+        performSearch({ preserveFocus: true });
+    }
     if (searchState.matches.length === 0 || searchState.error) return;
     let targetIndex = searchState.currentIndex;
     if (targetIndex === -1) {
@@ -4098,7 +4128,7 @@ function handleValueChanged(loader, options = {}) {
     updateTopLevelNavigator();
     updateBulkControls();
     if (!options.skipSearchRefresh) {
-        requestSearchRefresh();
+        markSearchDirty();
     }
 }
 
@@ -5985,6 +6015,9 @@ if (searchInput) {
         if (ev.key === "Enter") {
             ev.preventDefault();
             commitSearchHistory();
+            if (searchState.needsRefresh) {
+                performSearch({ preserveFocus: true });
+            }
             moveSearch(ev.shiftKey ? -1 : 1);
         }
     });
