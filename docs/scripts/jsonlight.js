@@ -4503,6 +4503,39 @@ function clearFileNameDisplay() {
     updateFileNameDisplay(null);
 }
 
+function setCurrentLoadedFile(file, mode) {
+    currentLoadedFile = file || null;
+    currentLoadedFileMode = currentLoadedFile ? normalizeFileMode(mode) : null;
+    updateReloadFileButtonState();
+}
+
+function updateReloadFileButtonState() {
+    if (!reloadFileAction) return;
+    const enabled = !!currentLoadedFile;
+    reloadFileAction.setAttribute("aria-disabled", enabled ? "false" : "true");
+}
+
+async function renderSelectedFile(file, mode) {
+    const renderMode = normalizeFileMode(mode);
+    updateFileNameDisplay(file.name);
+    setCurrentLoadedFile(file, renderMode);
+    if (renderMode === FILE_MODE_JSONL) {
+        await renderJsonlFile(file);
+    }
+    else {
+        await renderJsonFile(file);
+    }
+}
+
+async function reloadCurrentFile() {
+    if (!currentLoadedFile) return;
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+        const shouldReload = window.confirm("Reload the current file? Any unsaved modifications in the editor will be lost.");
+        if (!shouldReload) return;
+    }
+    await renderSelectedFile(currentLoadedFile, currentLoadedFileMode || getFileOperationMode());
+}
+
 function normalizeFileMode(mode) {
     return mode === FILE_MODE_JSONL ? FILE_MODE_JSONL : FILE_MODE_JSON;
 }
@@ -5061,8 +5094,11 @@ const FILE_MODE_JSONL = "jsonl";
 let fileOperationMode = FILE_MODE_JSON;
 let downloadDataButton = null;
 let filePicker = null;
+let reloadFileAction = null;
 let fileModeInputs = [];
 let lastLoadedFileName = "";
+let currentLoadedFile = null;
+let currentLoadedFileMode = null;
 const THEME_LIGHT = "light";
 const THEME_DARK = "dark";
 const THEME_STORAGE_KEY = "jsonlight.themePreference";
@@ -5549,6 +5585,7 @@ function renderFromPasteAreaValue() {
     if (!pasteArea) return;
     hideJsonlControls();
     clearFileNameDisplay();
+    setCurrentLoadedFile(null, null);
     renderJsonStr(pasteArea.value);
 }
 
@@ -5711,21 +5748,32 @@ fileModeInputs.forEach((input) => {
 
 filePicker = document.querySelector("#filepicker");
 if (filePicker) {
-    filePicker.addEventListener("change", () => {
+    filePicker.addEventListener("change", async () => {
         const files = filePicker.files;
         if (!files || !files[0]) {
             clearFileNameDisplay();
+            setCurrentLoadedFile(null, null);
             return;
         }
         const file = files[0];
-        updateFileNameDisplay(file.name);
-        if (getFileOperationMode() === FILE_MODE_JSONL) {
-            renderJsonlFile(file);
-        }
-        else {
-            renderJsonFile(file);
+        await renderSelectedFile(file, getFileOperationMode());
+    });
+}
+
+reloadFileAction = document.querySelector("#reload-file-action");
+if (reloadFileAction) {
+    reloadFileAction.addEventListener("click", () => {
+        if (!currentLoadedFile) return;
+        void reloadCurrentFile();
+    });
+    reloadFileAction.addEventListener("keydown", (ev) => {
+        if (!currentLoadedFile) return;
+        if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            void reloadCurrentFile();
         }
     });
+    updateReloadFileButtonState();
 }
 
 if (appendDataState.openButton) {

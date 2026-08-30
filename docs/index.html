@@ -56,6 +56,19 @@
       <div class="mb-3">
         <div class="d-flex align-items-center gap-2 mb-1">
           <label for="filepicker" class="form-label mb-0 flex-grow-1">Open file</label>
+          <span
+            id="reload-file-action"
+            class="reload-file-action"
+            role="button"
+            tabindex="0"
+            title="Reload current file"
+            aria-label="Reload current file"
+            aria-disabled="true"
+            data-bs-toggle="tooltip"
+            data-bs-title="Reload current file"
+          >
+            ↻
+          </span>
         </div>
         <input type="file" class="form-control form-control-sm" id="filepicker" name="filepicker" accept=".json, .geojson" title="Choose a file to load">
         <div class="d-flex gap-2 mt-2">
