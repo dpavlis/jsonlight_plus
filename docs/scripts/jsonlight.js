@@ -4508,20 +4508,32 @@ function setCurrentLoadedFile(file, mode, sourcePath = null, sourceHandle = null
     currentLoadedFileMode = currentLoadedFile ? normalizeFileMode(mode) : null;
     currentLoadedFilePath = currentLoadedFile ? sourcePath : null;
     currentLoadedFileHandle = currentLoadedFile ? sourceHandle : null;
+    currentLoadedFileReloadSource = currentLoadedFilePath || currentLoadedFileHandle ? "disk" : (currentLoadedFile ? "snapshot" : null);
     updateReloadFileButtonState();
 }
 
 function updateReloadFileButtonState() {
     if (!reloadFileAction) return;
-    const enabled = !!currentLoadedFilePath || !!currentLoadedFileHandle;
+    const enabled = !!currentLoadedFile;
     reloadFileAction.setAttribute("aria-disabled", enabled ? "false" : "true");
+    reloadFileAction.classList.toggle("snapshot-source", currentLoadedFileReloadSource === "snapshot");
+    const title = currentLoadedFileReloadSource === "snapshot"
+        ? "Reload current file (snapshot-only; may not reflect disk changes)"
+        : "Reload current file";
+    reloadFileAction.title = title;
+    reloadFileAction.setAttribute("aria-label", title);
+    reloadFileAction.setAttribute("data-bs-title", title);
 }
 
-async function renderSelectedFile(file, mode, sourcePath = null, sourceHandle = null) {
+async function renderSelectedFile(file, mode, sourcePath = null, sourceHandle = null, sourceKind = null) {
     const renderMode = normalizeFileMode(mode);
     const resolvedSourcePath = sourcePath || (file && typeof file.path === "string" ? file.path : null);
     updateFileNameDisplay(file.name);
     setCurrentLoadedFile(file, renderMode, resolvedSourcePath, sourceHandle);
+    if (sourceKind === "snapshot") {
+        currentLoadedFileReloadSource = "snapshot";
+        updateReloadFileButtonState();
+    }
     if (renderMode === FILE_MODE_JSONL) {
         await renderJsonlFile(file);
     }
@@ -4532,7 +4544,10 @@ async function renderSelectedFile(file, mode, sourcePath = null, sourceHandle = 
 
 async function reloadCurrentFile() {
     if (typeof window !== "undefined" && typeof window.confirm === "function") {
-        const shouldReload = window.confirm("Reload the current file? Any unsaved modifications in the editor will be lost.");
+        const warning = currentLoadedFileReloadSource === "snapshot"
+            ? "Reload this file? It was opened without live disk access, so the reload may not reflect changes on disk."
+            : "Reload the current file? Any unsaved modifications in the editor will be lost.";
+        const shouldReload = window.confirm(warning);
         if (!shouldReload) return;
     }
     const renderMode = currentLoadedFileMode || getFileOperationMode();
@@ -4562,8 +4577,9 @@ async function reloadCurrentFile() {
             return;
         }
     }
-    if (currentLoadedFilePath || currentLoadedFile) {
-        alert("This file was opened without disk access, so reload cannot pick up on-disk changes. Re-open it using a disk-backed file picker.");
+    if (currentLoadedFileReloadSource === "snapshot" && currentLoadedFile) {
+        alert("This file was opened without live disk access, so reload will only reparse the original snapshot and may not pick up on-disk changes.");
+        await renderSelectedFile(currentLoadedFile, renderMode, null, null, "snapshot");
     }
 }
 
@@ -4579,15 +4595,16 @@ async function openFileFromDisk(fileHandle, mode) {
 }
 
 async function openFileFromBrowser() {
-    if (typeof window === "undefined" || typeof window.showOpenFilePicker !== "function") {
-        throw new Error("This browser does not support disk-backed file picking.");
+    if (typeof window !== "undefined" && typeof window.showOpenFilePicker === "function") {
+        const [fileHandle] = await window.showOpenFilePicker({
+            multiple: false,
+            types: getOpenFilePickerTypes()
+        });
+        if (!fileHandle) return;
+        await openFileFromDisk(fileHandle, getFileOperationMode());
+        return;
     }
-    const [fileHandle] = await window.showOpenFilePicker({
-        multiple: false,
-        types: getOpenFilePickerTypes()
-    });
-    if (!fileHandle) return;
-    await openFileFromDisk(fileHandle, getFileOperationMode());
+    await openFileFromFallbackInput();
 }
 
 async function openFileFromDesktop() {
@@ -4796,6 +4813,43 @@ function pruneBulkSelectionAgainstRoot() {
             bulkSelectionState.delete(identifier);
         }
     }
+}
+
+function getOpenFileAcceptAttribute() {
+    const mode = getFileOperationMode();
+    return mode === FILE_MODE_JSONL
+        ? ".jsonl, .ndjson, .jsonlines, .txt"
+        : ".json, .geojson, .txt";
+}
+
+function openFileFromFallbackInput() {
+    return new Promise((resolve, reject) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = getOpenFileAcceptAttribute();
+        input.style.position = "fixed";
+        input.style.left = "-9999px";
+        input.style.top = "-9999px";
+        input.addEventListener("change", async () => {
+            try {
+                const file = input.files && input.files[0] ? input.files[0] : null;
+                if (!file) {
+                    resolve();
+                    return;
+                }
+                await renderSelectedFile(file, getFileOperationMode(), null, null, "snapshot");
+                resolve();
+            }
+            catch (error) {
+                reject(error);
+            }
+            finally {
+                input.remove();
+            }
+        }, { once: true });
+        document.body.appendChild(input);
+        input.click();
+    });
 }
 
 function updateBulkControls() {
@@ -5218,6 +5272,7 @@ let currentLoadedFile = null;
 let currentLoadedFileMode = null;
 let currentLoadedFilePath = null;
 let currentLoadedFileHandle = null;
+let currentLoadedFileReloadSource = null;
 const THEME_LIGHT = "light";
 const THEME_DARK = "dark";
 const THEME_STORAGE_KEY = "jsonlight.themePreference";

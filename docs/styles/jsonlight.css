@@ -432,6 +432,7 @@ body.theme-dark .search-property-options {
 }
 
 .reload-file-action {
+    position: relative;
     font-size: 1rem;
     line-height: 1;
     color: #6c757d;
@@ -444,6 +445,29 @@ body.theme-dark .search-property-options {
     height: 1.2rem;
     border-radius: 0.2rem;
     transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.reload-file-action.snapshot-source {
+    color: #b45309;
+    background-color: rgba(245, 158, 11, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.35);
+}
+
+.reload-file-action.snapshot-source::after {
+    content: "!";
+    position: absolute;
+    right: -0.15rem;
+    top: -0.2rem;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #111827;
+    font-size: 0.5rem;
+    font-weight: 700;
+    line-height: 0.7rem;
+    text-align: center;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
 }
 
 .reload-file-action:hover,
@@ -471,6 +495,18 @@ body.theme-dark .reload-file-action:focus-visible {
 
 body.theme-dark .reload-file-action[aria-disabled="true"] {
     color: #64748b;
+}
+
+body.theme-dark .reload-file-action.snapshot-source {
+    color: #fbbf24;
+    background-color: rgba(245, 158, 11, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.45);
+}
+
+body.theme-dark .reload-file-action.snapshot-source::after {
+    background: #fbbf24;
+    color: #111827;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
 }
 
 .settings-button {
