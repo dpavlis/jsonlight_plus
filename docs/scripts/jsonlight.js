@@ -4503,22 +4503,25 @@ function clearFileNameDisplay() {
     updateFileNameDisplay(null);
 }
 
-function setCurrentLoadedFile(file, mode) {
+function setCurrentLoadedFile(file, mode, sourcePath = null, sourceHandle = null) {
     currentLoadedFile = file || null;
     currentLoadedFileMode = currentLoadedFile ? normalizeFileMode(mode) : null;
+    currentLoadedFilePath = currentLoadedFile ? sourcePath : null;
+    currentLoadedFileHandle = currentLoadedFile ? sourceHandle : null;
     updateReloadFileButtonState();
 }
 
 function updateReloadFileButtonState() {
     if (!reloadFileAction) return;
-    const enabled = !!currentLoadedFile;
+    const enabled = !!currentLoadedFilePath || !!currentLoadedFileHandle;
     reloadFileAction.setAttribute("aria-disabled", enabled ? "false" : "true");
 }
 
-async function renderSelectedFile(file, mode) {
+async function renderSelectedFile(file, mode, sourcePath = null, sourceHandle = null) {
     const renderMode = normalizeFileMode(mode);
+    const resolvedSourcePath = sourcePath || (file && typeof file.path === "string" ? file.path : null);
     updateFileNameDisplay(file.name);
-    setCurrentLoadedFile(file, renderMode);
+    setCurrentLoadedFile(file, renderMode, resolvedSourcePath, sourceHandle);
     if (renderMode === FILE_MODE_JSONL) {
         await renderJsonlFile(file);
     }
@@ -4528,12 +4531,126 @@ async function renderSelectedFile(file, mode) {
 }
 
 async function reloadCurrentFile() {
-    if (!currentLoadedFile) return;
     if (typeof window !== "undefined" && typeof window.confirm === "function") {
         const shouldReload = window.confirm("Reload the current file? Any unsaved modifications in the editor will be lost.");
         if (!shouldReload) return;
     }
-    await renderSelectedFile(currentLoadedFile, currentLoadedFileMode || getFileOperationMode());
+    const renderMode = currentLoadedFileMode || getFileOperationMode();
+    if (currentLoadedFilePath && typeof window !== "undefined" && window.__TAURI__) {
+        try {
+            const { readTextFile } = await import("https://cdn.jsdelivr.net/npm/@tauri-apps/api@2/fs");
+            const fileText = await readTextFile(currentLoadedFilePath);
+            const file = new File([fileText], getFileNameFromPath(currentLoadedFilePath), { type: "text/plain" });
+            await renderSelectedFile(file, renderMode, currentLoadedFilePath);
+            return;
+        }
+        catch (error) {
+            console.error("Failed to reload file from path", error);
+            alert("Unable to reload file: " + error.message);
+            return;
+        }
+    }
+    if (currentLoadedFileHandle && typeof currentLoadedFileHandle.getFile === "function") {
+        try {
+            const freshFile = await currentLoadedFileHandle.getFile();
+            await renderSelectedFile(freshFile, renderMode, null, currentLoadedFileHandle);
+            return;
+        }
+        catch (error) {
+            console.error("Failed to reload file from file handle", error);
+            alert("Unable to reload file: " + error.message);
+            return;
+        }
+    }
+    if (currentLoadedFilePath || currentLoadedFile) {
+        alert("This file was opened without disk access, so reload cannot pick up on-disk changes. Re-open it using a disk-backed file picker.");
+    }
+}
+
+function getFileNameFromPath(filePath) {
+    if (!filePath) return "";
+    const segments = String(filePath).split(/[\\/]/);
+    return segments[segments.length - 1] || "";
+}
+
+async function openFileFromDisk(fileHandle, mode) {
+    const file = await fileHandle.getFile();
+    await renderSelectedFile(file, mode, null, fileHandle);
+}
+
+async function openFileFromBrowser() {
+    if (typeof window === "undefined" || typeof window.showOpenFilePicker !== "function") {
+        throw new Error("This browser does not support disk-backed file picking.");
+    }
+    const [fileHandle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: getOpenFilePickerTypes()
+    });
+    if (!fileHandle) return;
+    await openFileFromDisk(fileHandle, getFileOperationMode());
+}
+
+async function openFileFromDesktop() {
+    if (typeof window === "undefined" || !window.__TAURI__) {
+        throw new Error("This desktop runtime does not expose a file open dialog.");
+    }
+    const [{ open }, { readTextFile }] = await Promise.all([
+        import("https://cdn.jsdelivr.net/npm/@tauri-apps/api@2/dialog"),
+        import("https://cdn.jsdelivr.net/npm/@tauri-apps/api@2/fs")
+    ]);
+    const result = await open({
+        multiple: false,
+        directory: false,
+        filters: getOpenFilePickerTypes().map((entry) => ({
+            name: entry.description,
+            extensions: Object.values(entry.accept).flat().map((extension) => extension.replace(/^\./, ""))
+        }))
+    });
+    if (!result || Array.isArray(result)) return;
+    const filePath = result;
+    const fileText = await readTextFile(filePath);
+    const fileName = getFileNameFromPath(filePath);
+    const mode = getFileOperationMode();
+    const file = new File([fileText], fileName, { type: "text/plain" });
+    await renderSelectedFile(file, mode, filePath);
+}
+
+function getOpenFilePickerTypes() {
+    const mode = getFileOperationMode();
+    if (mode === FILE_MODE_JSONL) {
+        return [{
+            description: "JSON Lines",
+            accept: {
+                "application/json": [".jsonl", ".ndjson", ".jsonlines", ".txt"]
+            }
+        }];
+    }
+    return [{
+        description: "JSON",
+        accept: {
+            "application/json": [".json", ".geojson", ".txt"]
+        }
+    }];
+}
+
+async function handleBrowserFilePickerOpen() {
+    try {
+        if (typeof window !== "undefined" && window.__TAURI__) {
+            await openFileFromDesktop();
+        }
+        else {
+            await openFileFromBrowser();
+        }
+        return true;
+    }
+    catch (error) {
+        if (error && error.name === "AbortError") {
+            return true;
+        }
+        console.error("Failed to open file from browser picker", error);
+        alert("Unable to open file from disk: " + error.message);
+        return true;
+    }
 }
 
 function normalizeFileMode(mode) {
@@ -5099,6 +5216,8 @@ let fileModeInputs = [];
 let lastLoadedFileName = "";
 let currentLoadedFile = null;
 let currentLoadedFileMode = null;
+let currentLoadedFilePath = null;
+let currentLoadedFileHandle = null;
 const THEME_LIGHT = "light";
 const THEME_DARK = "dark";
 const THEME_STORAGE_KEY = "jsonlight.themePreference";
@@ -5617,29 +5736,22 @@ function renderJsonStr(jsonStr) {
 }
 
 async function renderJsonFile(file) {
-    hideJsonlControls();
-    document.querySelector("#view").replaceChildren();
-
     let loader = newDataLoader();
     let result = await loader.loadFile(file);
     if (!result.success) {
-        clearCurrentRootLoader();
         displayParseError(result);
         return;
     }
+    hideJsonlControls();
     setCurrentRootLoader(loader, "json");
     refreshSearchPropertyOptionsFromCurrentData();
     renderJSON(loader);
 }
 
 async function renderJsonlFile(file) {
-    document.querySelector("#view").replaceChildren();
-
     const loader = new JsonlDataLoader();
     let result = await loader.loadFile(file);
     if (!result.success) {
-        hideJsonlControls();
-        clearCurrentRootLoader();
         displayParseError(result);
         return;
     }
@@ -5748,15 +5860,8 @@ fileModeInputs.forEach((input) => {
 
 filePicker = document.querySelector("#filepicker");
 if (filePicker) {
-    filePicker.addEventListener("change", async () => {
-        const files = filePicker.files;
-        if (!files || !files[0]) {
-            clearFileNameDisplay();
-            setCurrentLoadedFile(null, null);
-            return;
-        }
-        const file = files[0];
-        await renderSelectedFile(file, getFileOperationMode());
+    filePicker.addEventListener("click", () => {
+        void handleBrowserFilePickerOpen();
     });
 }
 
@@ -6147,11 +6252,11 @@ async function handleOpenWithFile(filePath, mode) {
                 // Create a temporary blob to simulate a file for JSONL processing
                 const blob = new Blob([fileContent], { type: 'text/plain' });
                 const file = new File([blob], fileName, { type: 'text/plain' });
-                await renderJsonlFile(file);
+                await renderSelectedFile(file, mode, filePath);
             } else {
                 // JSON mode (includes .json and .geojson)
                 hideJsonlControls();
-                renderJsonStr(fileContent);
+                await renderSelectedFile(new File([fileContent], fileName, { type: 'text/plain' }), mode, filePath);
             }
         }
     } catch (error) {

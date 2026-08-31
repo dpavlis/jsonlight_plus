@@ -55,7 +55,7 @@
       </div>
       <div class="mb-3">
         <div class="d-flex align-items-center gap-2 mb-1">
-          <label for="filepicker" class="form-label mb-0 flex-grow-1">Open file</label>
+          <span class="form-label mb-0 flex-grow-1">Open file</span>
           <span
             id="reload-file-action"
             class="reload-file-action"
@@ -70,7 +70,7 @@
             ↻
           </span>
         </div>
-        <input type="file" class="form-control form-control-sm" id="filepicker" name="filepicker" accept=".json, .geojson" title="Choose a file to load">
+        <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="filepicker" title="Choose a file to load from disk">Choose file from disk</button>
         <div class="d-flex gap-2 mt-2">
           <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="append-data-button" title="Append or paste JSON/JSONL data">Append/Paste data</button>
           <button type="button" class="btn btn-outline-success btn-sm flex-fill" id="download-data" disabled title="Download the current data">Save JSON</button>
