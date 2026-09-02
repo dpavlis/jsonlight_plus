@@ -4492,6 +4492,7 @@ function updateFileNameDisplay(fileName) {
         fileNameElement.title = fileName; // Show full name on hover
         fileNameElement.style.display = "block";
         lastLoadedFileName = fileName;
+        document.title = `JS+ ${fileName}`;
     } else {
         fileNameElement.textContent = "No file selected";
         fileNameElement.title = "";
