@@ -529,14 +529,14 @@
     </div>
 
     <div class="modal fade" id="search-property-modal" tabindex="-1" aria-labelledby="search-property-title" aria-hidden="true">
-      <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="search-property-title">Search Property Filter</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" title="Close"></button>
           </div>
           <div class="modal-body">
-            <div class="text-muted small mb-2">Leave empty to search all properties. Add a condition to limit matches to objects where another property equals or contains a value.</div>
+            <div class="text-muted small mb-2">Empty means any property. Add one or more properties to restrict search. Optional conditions require another property to equal or contain a value before that object is searched.</div>
             <div class="search-property-rules" id="search-property-rules"></div>
             <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="search-property-add">Add filter</button>
             <div class="text-danger small mt-2" id="search-property-error" role="alert" aria-live="polite"></div>

@@ -373,6 +373,10 @@ body.bulk-mode-enabled .bulk-checkbox-wrapper {
     font-weight: 600;
 }
 
+#search-property-modal .modal-dialog {
+    max-width: min(1100px, 95vw);
+}
+
 .search-property-rules {
     display: flex;
     flex-direction: column;
@@ -381,13 +385,34 @@ body.bulk-mode-enabled .bulk-checkbox-wrapper {
 
 .search-property-rule {
     display: grid;
-    grid-template-columns: 1.2fr 1fr 0.85fr 1fr auto;
-    gap: 0.5rem;
+    grid-template-columns: 1.2fr auto 1fr minmax(5.8rem, 0.7fr) 1fr auto;
+    column-gap: 0.35rem;
+    row-gap: 0.35rem;
     align-items: center;
 }
 
 .search-property-rule .form-control {
     min-width: 0;
+}
+
+.search-property-rule .search-property-rule-condition-mode {
+    min-width: 5.8rem;
+}
+
+.search-property-rule-descendants {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    margin-left: 0 !important;
+    white-space: nowrap;
+}
+
+.search-property-rule-descendants .form-check-input {
+    margin: 0;
+}
+
+.search-property-rule-descendants .form-check-label {
+    margin: 0;
 }
 
 .search-property-rule-remove {

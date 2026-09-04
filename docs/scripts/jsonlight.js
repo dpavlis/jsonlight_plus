@@ -2110,9 +2110,10 @@ function updateSearchPropertySummary() {
         return;
     }
     const summary = searchPropertyFilterState.rules.map((rule) => {
-        if (!rule.conditionKey) return rule.property;
+        const scopeLabel = rule.includeDescendants ? `${rule.property} ↓` : rule.property;
+        if (!rule.conditionKey) return scopeLabel;
         const modeLabel = rule.conditionMatchMode === "contains" ? "contains" : "=";
-        return `${rule.property} where ${rule.conditionKey} ${modeLabel} ${rule.conditionValue}`;
+        return `${scopeLabel} where ${rule.conditionKey} ${modeLabel} ${rule.conditionValue}`;
     }).join("; ");
     searchPropertySummary.textContent = summary || "All";
 }
@@ -2127,6 +2128,17 @@ function addSearchPropertyRuleRow(rule = {}) {
     propertyInput.placeholder = "Property";
     propertyInput.value = rule.property || "";
     propertyInput.setAttribute("list", "search-property-suggestions");
+    const descendantsToggle = document.createElement("label");
+    descendantsToggle.classList.add("form-check", "form-check-inline", "mb-0", "search-property-rule-descendants");
+    const descendantsCheckbox = document.createElement("input");
+    descendantsCheckbox.type = "checkbox";
+    descendantsCheckbox.classList.add("form-check-input");
+    descendantsCheckbox.checked = !!rule.includeDescendants;
+    const descendantsLabel = document.createElement("span");
+    descendantsLabel.classList.add("form-check-label", "small", "text-muted");
+    descendantsLabel.textContent = "children";
+    descendantsToggle.appendChild(descendantsCheckbox);
+    descendantsToggle.appendChild(descendantsLabel);
     const conditionKeyInput = document.createElement("input");
     conditionKeyInput.type = "text";
     conditionKeyInput.classList.add("form-control", "form-control-sm", "search-property-rule-condition-key");
@@ -2158,6 +2170,7 @@ function addSearchPropertyRuleRow(rule = {}) {
         row.remove();
     });
     row.appendChild(propertyInput);
+    row.appendChild(descendantsToggle);
     row.appendChild(conditionKeyInput);
     row.appendChild(conditionModeSelect);
     row.appendChild(conditionValueInput);
@@ -2180,11 +2193,14 @@ function readSearchPropertyRulesFromUI() {
     const rows = Array.from(searchPropertyRulesContainer.querySelectorAll(".search-property-rule"));
     return rows.map((row) => {
         const propertyInput = row.querySelector(".search-property-rule-property");
+        const descendantsToggle = row.querySelector(".search-property-rule-descendants");
         const conditionKeyInput = row.querySelector(".search-property-rule-condition-key");
         const conditionValueInput = row.querySelector(".search-property-rule-condition-value");
         const conditionModeSelect = row.querySelector(".search-property-rule-condition-mode");
+        const descendantsCheckbox = descendantsToggle ? descendantsToggle.querySelector("input") : null;
         return {
             property: normalizePropertyName(propertyInput?.value || ""),
+            includeDescendants: !!(descendantsCheckbox && descendantsCheckbox.checked),
             conditionKey: normalizePropertyName(conditionKeyInput?.value || ""),
             conditionValue: normalizePropertyName(conditionValueInput?.value || ""),
             conditionMatchMode: conditionModeSelect && conditionModeSelect.value === "contains"
@@ -2548,50 +2564,55 @@ function buildSearchPattern(query, isRegex) {
     };
 }
 
-function collectSearchMatches(value, path, pattern, propertyFilter) {
+function collectSearchMatches(value, path, pattern, propertyFilter, inheritedScope = false) {
     if (Array.isArray(value)) {
         value.forEach((item, index) => {
-            evaluateSearchNode(path, index, item, pattern, propertyFilter, null);
+            evaluateSearchNode(path, index, item, pattern, propertyFilter, null, inheritedScope);
         });
         return;
     }
     if (value && typeof value === "object") {
         Object.entries(value).forEach(([key, childValue]) => {
-            evaluateSearchNode(path, key, childValue, pattern, propertyFilter, value);
+            const matchingRules = getMatchingSearchRules(key, value, propertyFilter);
+            const currentScope = inheritedScope || matchingRules.some((rule) => rule.includeDescendants);
+            evaluateSearchNode(path, key, childValue, pattern, propertyFilter, value, currentScope);
         });
         return;
     }
 
     const primitiveText = formatValueForSearch(value);
-    if (!propertyFilter || propertyFilter.length === 0) {
+    if (!propertyFilter || propertyFilter.length === 0 || inheritedScope) {
         pushValueMatches(path, primitiveText, pattern);
     }
 }
 
-function evaluateSearchNode(path, key, value, pattern, propertyFilter, parentObject) {
+function evaluateSearchNode(path, key, value, pattern, propertyFilter, parentObject, inheritedScope = false) {
     const nextPath = [...path, key];
     const hasFilter = propertyFilter && propertyFilter.length > 0;
-    const isPropertyMatch = hasFilter
-        ? isSearchPropertyMatch(key, parentObject, propertyFilter)
-        : true;
-    if (!hasFilter) {
+    const matchingRules = hasFilter ? getMatchingSearchRules(key, parentObject, propertyFilter) : [];
+    const isPropertyMatch = matchingRules.length > 0;
+    const descendantScope = matchingRules.some((rule) => rule.includeDescendants);
+    const isInScopedSubtree = inheritedScope || descendantScope;
+    const shouldSearchNode = !hasFilter || isPropertyMatch || inheritedScope;
+
+    if (shouldSearchNode) {
         const keyText = keyToSearchString(key);
         const rawKeyText = typeof key === "string" ? key : (typeof key === "number" ? key.toString() : "");
         pushKeyMatches(nextPath, keyText, rawKeyText, pattern);
     }
-    if (isPropertyMatch && isPrimitiveValue(value)) {
+    if (shouldSearchNode && isPrimitiveValue(value)) {
         const valueText = formatValueForSearch(value);
         pushValueMatches(nextPath, valueText, pattern);
     }
     if (value && typeof value === "object") {
-        collectSearchMatches(value, nextPath, pattern, propertyFilter);
+        collectSearchMatches(value, nextPath, pattern, propertyFilter, isInScopedSubtree);
     }
 }
 
-function isSearchPropertyMatch(key, parentObject, rules) {
-    if (!rules || rules.length === 0) return true;
-    if (typeof key !== "string") return false;
-    return rules.some((rule) => {
+function getMatchingSearchRules(key, parentObject, rules) {
+    if (!rules || rules.length === 0) return [];
+    if (typeof key !== "string") return [];
+    return rules.filter((rule) => {
         if (!rule || rule.property !== key) return false;
         if (!rule.conditionKey) return true;
         if (!parentObject || typeof parentObject !== "object") return false;
@@ -2604,6 +2625,10 @@ function isSearchPropertyMatch(key, parentObject, rules) {
         }
         return candidateText === expectedText;
     });
+}
+
+function isSearchPropertyMatch(key, parentObject, rules) {
+    return getMatchingSearchRules(key, parentObject, rules).length > 0;
 }
 
 function pushKeyMatches(path, keyText, rawKeyText, pattern) {
