@@ -3019,7 +3019,9 @@ function getReplaceText() {
 function getReplacementTextForRegexEngine() {
     const raw = getReplaceText();
     if (searchState.isRegex) {
-        return raw;
+        // In regex mode, pre-process control-char escapes (e.g. \n, \t) so they
+        // are replaced by the equivalent control characters in the output.
+        return interpretTabInsertionInput(raw);
     }
     return raw.replace(/\$/g, "$$$$");
 }
@@ -3163,13 +3165,16 @@ function buildReplacementSegment(matchDetails, inputText) {
     if (!searchState.isRegex) {
         return rawTemplate;
     }
+    // In regex mode, pre-process control-char escapes (e.g. \n, \t) so they are
+    // replaced by the equivalent control characters in the output.
+    const template = interpretTabInsertionInput(rawTemplate);
     const matchText = getMatchedTextFromDetails(matchDetails, inputText);
     const groups = Array.isArray(matchDetails.groups) ? matchDetails.groups : [];
     const fakeMatch = [matchText, ...groups];
     fakeMatch.index = typeof matchDetails.matchIndex === "number" ? matchDetails.matchIndex : 0;
     fakeMatch.input = inputText;
     fakeMatch.groups = matchDetails.groupsObject || {};
-    return applyReplacementTemplate(rawTemplate, fakeMatch, inputText);
+    return applyReplacementTemplate(template, fakeMatch, inputText);
 }
 
 function getMatchedTextFromDetails(matchDetails, inputText) {
@@ -4213,6 +4218,15 @@ function renderRawString(kvRoot) {
     // Fix it by appending an extra newline character.
     rawString.textContent = kvRoot.loader.getValue() + "\n";
     kvRoot.appendChild(rawString);
+
+    // Inserting a tall <pre> into the scroll container can disrupt the
+    // browser's scroll anchoring and cause the viewport to jump to an
+    // unpredictable position. Anchor the scroll so the top of the newly
+    // rendered text stays visible.
+    const scrollContainer = document.querySelector("#view");
+    if (scrollContainer && rawString.scrollIntoView) {
+        rawString.scrollIntoView({ block: "start" });
+    }
 }
 
 function cancelRawString(kvRoot) {
@@ -4664,7 +4678,9 @@ function getOpenFilePickerTypes() {
         return [{
             description: "JSON Lines",
             accept: {
-                "application/json": [".jsonl", ".ndjson", ".jsonlines", ".txt"]
+                // Use a distinct MIME type so the browser does not also show
+                // .json files (which are associated with application/json).
+                "application/x-ndjson": [".jsonl", ".ndjson", ".jsonlines", ".txt"]
             }
         }];
     }
@@ -4702,13 +4718,18 @@ function normalizeFileMode(mode) {
 
 function setFileOperationMode(mode, options = {}) {
     fileOperationMode = normalizeFileMode(mode);
-    if (!options.skipSync && fileModeInputs && fileModeInputs.length) {
-        fileModeInputs.forEach((input) => {
-            input.checked = input.value === fileOperationMode;
-        });
+    if (!options.skipSync && modeSwitch) {
+        modeSwitch.checked = fileOperationMode === FILE_MODE_JSONL;
+        updateModeSwitchLabel();
     }
     updateFilePickerAccept();
     updateDownloadButtons();
+}
+
+function updateModeSwitchLabel() {
+    if (modeSwitchLabel) {
+        modeSwitchLabel.textContent = fileOperationMode === FILE_MODE_JSONL ? "JSONL" : "JSON";
+    }
 }
 
 function getFileOperationMode() {
@@ -5292,7 +5313,8 @@ let fileOperationMode = FILE_MODE_JSON;
 let downloadDataButton = null;
 let filePicker = null;
 let reloadFileAction = null;
-let fileModeInputs = [];
+let modeSwitch = null;
+let modeSwitchLabel = null;
 let lastLoadedFileName = "";
 let currentLoadedFile = null;
 let currentLoadedFileMode = null;
@@ -5528,7 +5550,9 @@ function updateDownloadButtons() {
     if (!downloadDataButton) return;
     const mode = getFileOperationMode();
     const isJsonMode = mode === FILE_MODE_JSON;
-    downloadDataButton.disabled = isJsonMode ? !g_currentRootLoader : !g_jsonlLoader;
+    // The save button is enabled whenever there is data loaded, regardless of
+    // the current mode. The mode only determines the output format.
+    downloadDataButton.disabled = !g_currentRootLoader;
     downloadDataButton.textContent = isJsonMode ? "Save JSON" : "Save JSONL";
     downloadDataButton.title = isJsonMode
         ? "Download the current view as JSON"
@@ -5543,10 +5567,15 @@ function getJsonText() {
 }
 
 function getJsonlText() {
-    if (!g_jsonlLoader) return null;
-    g_jsonlLoader.syncLinesFromValue(g_currentRootLoader ? g_currentRootLoader.getValue() : undefined);
-    if (!g_jsonlLoader.lines || g_jsonlLoader.lines.length === 0) return null;
-    return g_jsonlLoader.lines.join("\n");
+    const value = g_currentRootLoader ? g_currentRootLoader.getValue() : undefined;
+    if (typeof value === "undefined" || value == null) return null;
+    // Convert the current root value to JSONL lines. This works whether the
+    // data was loaded as JSON or as JSONL, so the user can switch modes freely.
+    const lines = Array.isArray(value)
+        ? value.map((item) => JSON.stringify(cloneJsonValue(item)))
+        : [JSON.stringify(cloneJsonValue(value))];
+    if (!lines.length) return null;
+    return lines.join("\n");
 }
 
 function promptFileName(format, options = {}) {
@@ -5930,14 +5959,13 @@ if (pasteToggleButton && pasteCollapse) {
     }
 }
 
-fileModeInputs = Array.from(document.querySelectorAll("input[name='file-mode']"));
-fileModeInputs.forEach((input) => {
-    input.addEventListener("change", () => {
-        if (input.checked) {
-            setFileOperationMode(input.value);
-        }
+modeSwitch = document.querySelector("#mode-switch");
+modeSwitchLabel = document.querySelector("#mode-switch-label");
+if (modeSwitch) {
+    modeSwitch.addEventListener("change", () => {
+        setFileOperationMode(modeSwitch.checked ? FILE_MODE_JSONL : FILE_MODE_JSON);
     });
-});
+}
 
 filePicker = document.querySelector("#filepicker");
 if (filePicker) {
@@ -6252,8 +6280,7 @@ downloadDataButton = document.querySelector("#download-data");
 if (downloadDataButton) {
     downloadDataButton.addEventListener("click", () => handleSaveRequest(getFileOperationMode()));
 }
-const initialModeInput = fileModeInputs.find((input) => input.checked);
-const preferredInitialMode = initialModeInput ? initialModeInput.value : FILE_MODE_JSON;
+const preferredInitialMode = modeSwitch && modeSwitch.checked ? FILE_MODE_JSONL : FILE_MODE_JSON;
 if (fileOperationMode === FILE_MODE_JSON) {
     setFileOperationMode(preferredInitialMode, { skipSync: true });
 }

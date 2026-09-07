@@ -48,12 +48,12 @@
       </div>
       <hr class="my-2">
       <div class="mb-2">
-        <label class="form-label">Mode</label>
-        <div class="btn-group w-100" role="group" aria-label="Select JSON or JSONL mode">
-          <input type="radio" class="btn-check" name="file-mode" id="mode-json" value="json" autocomplete="off" checked>
-          <label class="btn btn-outline-secondary btn-sm" for="mode-json" title="Use JSON mode for opening and saving">JSON</label>
-          <input type="radio" class="btn-check" name="file-mode" id="mode-jsonl" value="jsonl" autocomplete="off">
-          <label class="btn btn-outline-secondary btn-sm" for="mode-jsonl" title="Use JSONL mode for opening and saving">JSONL</label>
+        <div class="d-flex align-items-center gap-2">
+          <label class="form-label mb-0">Mode</label>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="mode-switch" title="Toggle between JSON and JSONL mode">
+            <label class="form-check-label small mb-0" for="mode-switch" id="mode-switch-label">JSON</label>
+          </div>
         </div>
       </div>
       <div class="mb-3">
@@ -75,7 +75,7 @@
         </div>
         <button type="button" class="btn btn-outline-secondary btn-sm w-100" id="filepicker" title="Choose a file to load">Choose file</button>
         <div class="d-flex gap-2 mt-2">
-          <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="append-data-button" title="Append or paste JSON/JSONL data">Append/Paste data</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="append-data-button" title="Append or paste JSON/JSONL data">Append data</button>
           <button type="button" class="btn btn-outline-success btn-sm flex-fill" id="download-data" disabled title="Download the current data">Save JSON</button>
         </div>
       </div>
