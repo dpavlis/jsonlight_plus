@@ -3615,16 +3615,17 @@ function parseJsonlText(text) {
     return { success: true, items };
 }
 
-function parseAppendDataText(text, hintMode = null) {
+function parseAppendDataText(text, mode = getFileOperationMode()) {
     const trimmed = (text || "").trim();
     if (!trimmed) {
         return { success: false, error: "Paste JSON/JSONL or choose a file first." };
     }
-    if (hintMode === "jsonl") {
+    if (mode === FILE_MODE_JSONL) {
         const jsonlResult = parseJsonlText(trimmed);
         if (jsonlResult.success) {
             return { success: true, mode: "jsonl", items: jsonlResult.items, value: null };
         }
+        return jsonlResult;
     }
     const jsonResult = parseJsonTextWithContext(trimmed);
     if (jsonResult.success) {
@@ -3632,22 +3633,23 @@ function parseAppendDataText(text, hintMode = null) {
         const items = Array.isArray(value) ? value : [value];
         return { success: true, mode: "json", items, value };
     }
-    const jsonlFallback = parseJsonlText(trimmed);
-    if (jsonlFallback.success) {
-        return { success: true, mode: "jsonl", items: jsonlFallback.items, value: null };
-    }
     return { success: false, error: jsonResult.error, context: jsonResult.context };
 }
 
-function scheduleAppendDataParse(hintMode = null) {
+function scheduleAppendDataParse() {
     if (!appendDataState.textArea) return;
     if (appendDataState.parseHandle) {
         clearTimeout(appendDataState.parseHandle);
         appendDataState.parseHandle = null;
     }
+    appendDataState.parsedItems = null;
+    appendDataState.parsedMode = null;
+    appendDataState.parsedValue = null;
+    updateAppendDataSummary(0, null);
+    setAppendDataApplyState(true, "Parsing input.");
     appendDataState.parseHandle = setTimeout(() => {
         appendDataState.parseHandle = null;
-        const result = parseAppendDataText(appendDataState.textArea.value, hintMode);
+        const result = parseAppendDataText(appendDataState.textArea.value);
         if (!result.success) {
             appendDataState.parsedItems = null;
             appendDataState.parsedMode = null;
@@ -4201,6 +4203,10 @@ function updateEditingButtonVisibility(button) {
 
 function setEditingEnabled(isEnabled) {
     g_editingEnabled = isEnabled;
+    if (editingToggle) {
+        editingToggle.setAttribute("aria-pressed", g_editingEnabled ? "true" : "false");
+        editingToggle.title = g_editingEnabled ? "Disable editing" : "Enable editing";
+    }
     document.querySelectorAll(".edit-button, .duplicate-button, .delete-button").forEach(button => {
         updateEditingButtonVisibility(button);
     });
@@ -4720,10 +4726,13 @@ function setFileOperationMode(mode, options = {}) {
     fileOperationMode = normalizeFileMode(mode);
     if (!options.skipSync && modeSwitch) {
         modeSwitch.checked = fileOperationMode === FILE_MODE_JSONL;
-        updateModeSwitchLabel();
     }
+    updateModeSwitchLabel();
     updateFilePickerAccept();
     updateDownloadButtons();
+    if (appendDataState.textArea && appendDataState.textArea.value.trim()) {
+        scheduleAppendDataParse();
+    }
 }
 
 function updateModeSwitchLabel() {
@@ -4737,10 +4746,13 @@ function getFileOperationMode() {
 }
 
 function updateFilePickerAccept() {
-    if (!filePicker) return;
-    filePicker.accept = fileOperationMode === FILE_MODE_JSONL
+    const accept = fileOperationMode === FILE_MODE_JSONL
         ? ".jsonl, .ndjson, .jsonlines, .txt"
         : ".json, .geojson, .txt";
+    if (filePicker) filePicker.accept = accept;
+    if (appendDataState.fileInput) appendDataState.fileInput.accept = accept;
+    const pasteLabel = document.querySelector('label[for="append-data-text"]');
+    if (pasteLabel) pasteLabel.textContent = `Or paste ${fileOperationMode.toUpperCase()}`;
 }
 
 /*************************************
@@ -4910,7 +4922,8 @@ function updateBulkControls() {
     }
     if (bulkToggleInput) {
         bulkToggleInput.disabled = !allowed;
-        bulkToggleInput.checked = allowed && bulkOperationsEnabled;
+        bulkToggleInput.setAttribute("aria-pressed", bulkOperationsEnabled ? "true" : "false");
+        bulkToggleInput.title = bulkOperationsEnabled ? "Disable bulk operations" : "Enable bulk operations";
     }
     if (bulkDeleteContainer) {
         bulkDeleteContainer.style.display = bulkOperationsEnabled ? "" : "none";
@@ -4946,7 +4959,7 @@ function setBulkOperationsEnabled(enabled) {
     if (bulkOperationsEnabled === nextValue) return;
     if (nextValue && (!g_editingEnabled || !canUseBulkOperations())) {
         if (bulkToggleInput) {
-            bulkToggleInput.checked = false;
+            bulkToggleInput.setAttribute("aria-pressed", "false");
         }
         return;
     }
@@ -5295,6 +5308,16 @@ function initThemeFromPreference() {
     setTheme(preference, { skipStorage: true });
 }
 
+function setWrapMode(enabled, options = {}) {
+    const shouldWrap = !!enabled;
+    document.body.classList.toggle("wrap-mode-enabled", shouldWrap);
+    if (wrapToggleInput) wrapToggleInput.checked = shouldWrap;
+    if (!options.skipStorage) {
+        const storage = getLocalStorageSafe();
+        if (storage) storage.setItem(WRAP_STORAGE_KEY, String(shouldWrap));
+    }
+}
+
 /*************************************
  *           Controls                *
  *************************************/
@@ -5324,9 +5347,11 @@ let currentLoadedFileReloadSource = null;
 const THEME_LIGHT = "light";
 const THEME_DARK = "dark";
 const THEME_STORAGE_KEY = "jsonlight.themePreference";
+const WRAP_STORAGE_KEY = "jsonlight.wrapLines";
 const BULK_MODE_CLASS = "bulk-mode-enabled";
 let currentTheme = THEME_LIGHT;
 let themeToggleInput = null;
+let wrapToggleInput = null;
 let bulkOperationsEnabled = false;
 const bulkSelectionState = new Map();
 let bulkToggleInput = null;
@@ -6012,10 +6037,7 @@ if (appendDataState.fileInput) {
         if (appendDataState.textArea) {
             appendDataState.textArea.value = text;
         }
-        const hint = file.name.endsWith(".jsonl") || file.name.endsWith(".ndjson") || file.name.endsWith(".jsonlines")
-            ? "jsonl"
-            : "json";
-        scheduleAppendDataParse(hint);
+        scheduleAppendDataParse();
     });
 }
 
@@ -6076,6 +6098,13 @@ if (themeToggleInput) {
     themeToggleInput.addEventListener("change", () => {
         setTheme(themeToggleInput.checked ? THEME_DARK : THEME_LIGHT);
     });
+}
+
+wrapToggleInput = document.querySelector("#toggle-wrap");
+if (wrapToggleInput) {
+    const storage = getLocalStorageSafe();
+    setWrapMode(!!storage && storage.getItem(WRAP_STORAGE_KEY) === "true", { skipStorage: true });
+    wrapToggleInput.addEventListener("change", () => setWrapMode(wrapToggleInput.checked));
 }
 
 initializeTooltips();
@@ -6215,17 +6244,16 @@ function setExpandCollapseToggleState(isExpanded) {
     expandCollapseToggleState = isExpanded ? "expanded" : "collapsed";
     if (!expandCollapseToggleButton) return;
     expandCollapseToggleButton.dataset.state = expandCollapseToggleState;
-    expandCollapseToggleButton.textContent = isExpanded ? "Collapse All" : "Expand All";
-    expandCollapseToggleButton.classList.toggle("btn-outline-primary", !isExpanded);
-    expandCollapseToggleButton.classList.toggle("btn-outline-secondary", isExpanded);
+    expandCollapseToggleButton.textContent = isExpanded ? "Collapse" : "Expand";
+    expandCollapseToggleButton.title = isExpanded ? "Collapse all nodes" : "Expand all nodes";
     expandCollapseToggleButton.setAttribute("aria-pressed", isExpanded ? "true" : "false");
 }
 
 let editingToggle = document.querySelector("#toggle-editing");
 if (editingToggle) {
-    editingToggle.checked = g_editingEnabled;
-    editingToggle.addEventListener("change", () => {
-        setEditingEnabled(editingToggle.checked);
+    editingToggle.setAttribute("aria-pressed", g_editingEnabled ? "true" : "false");
+    editingToggle.addEventListener("click", () => {
+        setEditingEnabled(!g_editingEnabled);
     });
 }
 
@@ -6239,9 +6267,9 @@ bulkClearSelectionButton = document.querySelector("#bulk-clear-selection");
 bulkDeleteContainer = document.querySelector("#bulk-operations-actions");
 bulkSelectionCountLabel = document.querySelector("#bulk-selection-count");
 if (bulkToggleInput) {
-    bulkToggleInput.checked = bulkOperationsEnabled;
-    bulkToggleInput.addEventListener("change", () => {
-        setBulkOperationsEnabled(bulkToggleInput.checked);
+    bulkToggleInput.setAttribute("aria-pressed", bulkOperationsEnabled ? "true" : "false");
+    bulkToggleInput.addEventListener("click", () => {
+        setBulkOperationsEnabled(!bulkOperationsEnabled);
     });
 }
 if (bulkDeleteButton) {

@@ -92,17 +92,41 @@
         </div>
       </div>
       <div class="mt-1">
-        <div class="d-flex">
+        <div class="sidebar-toggle-group" role="group" aria-label="View controls">
           <button
             type="button"
-            class="btn btn-outline-primary btn-sm flex-fill"
+            class="btn btn-outline-primary btn-sm sidebar-toggle"
             id="expand-collapse-toggle"
-            title="Expand or collapse all nodes"
+            title="Expand all nodes"
             aria-pressed="false"
           >
-            Expand All
+            Expand
           </button>
+          <button type="button" class="btn btn-outline-primary btn-sm sidebar-toggle" id="toggle-editing" title="Enable editing" aria-pressed="true">Edit</button>
+          <button type="button" class="btn btn-outline-primary btn-sm sidebar-toggle" id="toggle-bulk-operations" title="Enable bulk operations" aria-pressed="false" disabled>Bulk</button>
         </div>
+      </div>
+      <div id="bulk-operations-actions" class="mt-2" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
+          <span>Selected items</span>
+          <span id="bulk-selection-count" aria-live="polite">0</span>
+        </div>
+        <div class="bulk-selection-actions mb-2" role="group" aria-label="Bulk selection actions">
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-select-all" disabled data-bs-toggle="tooltip" data-bs-title="Select all" aria-label="Select all">☑</button>
+          <span data-bs-toggle="tooltip" data-bs-title="Select filtered items based on the active search/filter. Run a search to enable this action." tabindex="0">
+            <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-select-filtered" disabled aria-label="Select filtered">◎</button>
+          </span>
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-clear-selection" disabled data-bs-toggle="tooltip" data-bs-title="Clear selection" aria-label="Clear selection">☐</button>
+        </div>
+        <div class="bulk-action-buttons mb-2" role="group" aria-label="Bulk item actions">
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-export-selected" disabled data-bs-toggle="tooltip" data-bs-title="Export selected" aria-label="Export selected">⤓</button>
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-copy-selected" disabled data-bs-toggle="tooltip" data-bs-title="Copy to clipboard" aria-label="Copy to clipboard">⎘</button>
+          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-delete-selected" disabled data-bs-toggle="tooltip" data-bs-title="Delete selected" aria-label="Delete selected">×</button>
+        </div>
+      </div>
+      <div class="form-check form-switch mt-2">
+        <input class="form-check-input" type="checkbox" id="toggle-wrap" role="switch">
+        <label class="form-check-label" for="toggle-wrap">Wrap lines</label>
       </div>
       <div class="mt-3">
         <label class="form-label">Top-level Navigation</label>
@@ -247,32 +271,6 @@
               </button>
             </div>
           </div>
-        </div>
-      </div>
-      <div class="form-check form-switch mt-3">
-        <input class="form-check-input" type="checkbox" id="toggle-editing" role="switch" checked>
-        <label class="form-check-label" for="toggle-editing">Enable editing</label>
-      </div>
-      <div class="form-check form-switch mt-3">
-        <input class="form-check-input" type="checkbox" id="toggle-bulk-operations">
-        <label class="form-check-label" for="toggle-bulk-operations">Bulk operations</label>
-      </div>
-      <div id="bulk-operations-actions" class="mt-2" style="display: none;">
-        <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
-          <span>Selected items</span>
-          <span id="bulk-selection-count" aria-live="polite">0</span>
-        </div>
-        <div class="bulk-selection-actions mb-2" role="group" aria-label="Bulk selection actions">
-          <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-select-all" disabled data-bs-toggle="tooltip" data-bs-title="Select all" aria-label="Select all">☑</button>
-          <span data-bs-toggle="tooltip" data-bs-title="Select filtered items based on the active search/filter. Run a search to enable this action." tabindex="0">
-            <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-select-filtered" disabled aria-label="Select filtered">◎</button>
-          </span>
-          <button type="button" class="btn btn-light btn-sm btn-icon bulk-selection-button" id="bulk-clear-selection" disabled data-bs-toggle="tooltip" data-bs-title="Clear selection" aria-label="Clear selection">☐</button>
-        </div>
-        <div class="bulk-action-buttons mb-2" role="group" aria-label="Bulk item actions">
-          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-export-selected" disabled data-bs-toggle="tooltip" data-bs-title="Export selected" aria-label="Export selected">⤓</button>
-          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-copy-selected" disabled data-bs-toggle="tooltip" data-bs-title="Copy to clipboard" aria-label="Copy to clipboard">⎘</button>
-          <button type="button" class="btn btn-light btn-sm btn-icon bulk-action-button" id="bulk-delete-selected" disabled data-bs-toggle="tooltip" data-bs-title="Delete selected" aria-label="Delete selected">×</button>
         </div>
       </div>
       <div class="mb-auto"></div>

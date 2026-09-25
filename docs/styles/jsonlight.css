@@ -19,11 +19,77 @@ main {
     font-size: var(--tree-font-size, 0.9rem);
 }
 
+body:not(.theme-dark) #view {
+    background-color: #f3f5f7;
+}
+
+body.wrap-mode-enabled #view {
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+body.wrap-mode-enabled #view .kv,
+body.wrap-mode-enabled #view .child-block,
+body.wrap-mode-enabled #view .child-list {
+    min-width: 0;
+}
+
+body.wrap-mode-enabled #view .kv {
+    align-items: flex-start !important;
+}
+
+body.wrap-mode-enabled #view .kv-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+body.wrap-mode-enabled #view .raw-string {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .sidebar {
     width: 240px;
     max-height: 100vh;
     overflow-y: auto;
     font-size: 0.9rem;
+}
+
+.sidebar-toggle-group {
+    display: flex;
+    width: 100%;
+}
+
+.sidebar-toggle-group .sidebar-toggle {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.25rem 0.125rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.sidebar-toggle-group .sidebar-toggle + .sidebar-toggle {
+    margin-left: -1px;
+}
+
+.sidebar-toggle-group .sidebar-toggle:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.sidebar-toggle-group .sidebar-toggle:not(:first-child):not(:last-child) {
+    border-radius: 0;
+}
+
+.sidebar-toggle-group .sidebar-toggle:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.sidebar-toggle-group .sidebar-toggle[aria-pressed="true"] {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
 }
 
 #property-editor-modal .property-editor-dialog {
@@ -335,8 +401,12 @@ body.property-editor-resizing * {
 .bulk-checkbox-wrapper {
     display: none;
     align-items: center;
-    margin-right: 0.5rem;
+    margin-right: 0.25rem;
     flex-shrink: 0;
+}
+
+body.bulk-mode-enabled .kv-button-group {
+    margin-right: 0.25rem;
 }
 
 body.bulk-mode-enabled .bulk-checkbox-wrapper {
@@ -706,6 +776,12 @@ body.theme-dark .btn-outline-primary:hover,
 body.theme-dark .btn-outline-success:hover {
     background-color: #1f2937;
     color: #f8fafc;
+}
+
+body.theme-dark .sidebar-toggle-group .sidebar-toggle[aria-pressed="true"] {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
 }
 
 body.theme-dark .kv.search-current {
